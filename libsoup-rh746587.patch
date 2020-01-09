@@ -1,0 +1,74 @@
+--- libsoup-2.28.2/libsoup/soup-connection.c.retries	2012-08-30 11:15:01.812839220 -0400
++++ libsoup-2.28.2/libsoup/soup-connection.c	2012-08-30 11:15:47.220838779 -0400
+@@ -315,7 +315,6 @@
+ 	g_return_if_fail (priv->cur_req == NULL);
+ 
+ 	stop_idle_timer (priv);
+-	priv->unused_timeout = 0;
+ 
+ 	soup_message_set_io_status (req, SOUP_MESSAGE_IO_STATUS_RUNNING);
+ 	priv->cur_req = req;
+@@ -330,6 +329,8 @@
+ {
+ 	SoupConnectionPrivate *priv = SOUP_CONNECTION_GET_PRIVATE (conn);
+ 
++	priv->unused_timeout = 0;
++
+ 	if (priv->state == SOUP_CONNECTION_IN_USE)
+ 		priv->state = SOUP_CONNECTION_IDLE;
+ 	start_idle_timer (conn);
+@@ -603,15 +604,29 @@
+ void
+ soup_connection_set_state (SoupConnection *conn, SoupConnectionState state)
+ {
++	SoupConnectionPrivate *priv;
++	SoupConnectionState old_state;
++
+ 	g_return_if_fail (SOUP_IS_CONNECTION (conn));
+-	g_return_if_fail (state > SOUP_CONNECTION_NEW &&
+-			  state < SOUP_CONNECTION_DISCONNECTED);
++	g_return_if_fail (state >= SOUP_CONNECTION_NEW &&
++			  state <= SOUP_CONNECTION_DISCONNECTED);
+ 
+-	SOUP_CONNECTION_GET_PRIVATE (conn)->state = state;
+-	if (state == SOUP_CONNECTION_IDLE)
++	priv = SOUP_CONNECTION_GET_PRIVATE (conn);
++	old_state = priv->state;
++	priv->state = state;
++	if (state == SOUP_CONNECTION_IDLE &&
++	    old_state == SOUP_CONNECTION_IN_USE)
+ 		clear_current_request (conn);
+ }
+ 
++gboolean
++soup_connection_get_ever_used (SoupConnection *conn)
++{
++	g_return_val_if_fail (SOUP_IS_CONNECTION (conn), FALSE);
++
++	return SOUP_CONNECTION_GET_PRIVATE (conn)->unused_timeout == 0;
++}
++
+ /**
+  * soup_connection_send_request:
+  * @conn: a #SoupConnection
+--- libsoup-2.28.2/libsoup/soup-connection.h.retries	2009-12-16 09:00:57.000000000 -0500
++++ libsoup-2.28.2/libsoup/soup-connection.h	2012-08-30 11:15:47.220838779 -0400
+@@ -75,6 +75,8 @@
+ void                soup_connection_set_state  (SoupConnection   *conn,
+ 						SoupConnectionState state);
+ 
++gboolean        soup_connection_get_ever_used  (SoupConnection   *conn);
++
+ void            soup_connection_send_request   (SoupConnection   *conn,
+ 						SoupMessage      *req);
+ 
+--- libsoup-2.28.2/libsoup/soup-message-io.c.retries	2009-12-16 09:40:29.000000000 -0500
++++ libsoup-2.28.2/libsoup/soup-message-io.c	2012-08-30 11:15:47.222838775 -0400
+@@ -196,6 +196,7 @@
+ 	if (io->mode == SOUP_MESSAGE_IO_CLIENT &&
+ 	    io->read_state <= SOUP_MESSAGE_IO_STATE_HEADERS &&
+ 	    io->read_meta_buf->len == 0 &&
++	    soup_connection_get_ever_used (io->conn) &&
+ 	    !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT) &&
+ 	    request_is_idempotent (msg)) {
+ 		/* Connection got closed, but we can safely try again */

@@ -4,7 +4,7 @@
 
 Name: libsoup
 Version: 2.28.2
-Release: 1%{?dist}.1
+Release: 4%{?dist}
 License: LGPLv2
 Group: Development/Libraries
 Summary: Soup, an HTTP library implementation
@@ -23,6 +23,8 @@ BuildRequires: GConf2-devel
 BuildRequires: gnome-keyring-devel
 
 Patch0: libsoup-CVE-2011-2524.patch
+Patch1: libsoup-rh657622.patch
+Patch2: libsoup-rh746587.patch
 
 %description
 Libsoup is an HTTP library implementation in C. It was originally part
@@ -51,6 +53,8 @@ you to develop applications that use the libsoup library.
 %prep
 %setup -q
 %patch0 -p1 -b .dotdot
+%patch1 -p1 -b .rh657622
+%patch2 -p1 -b .rh746587
 
 %build
 %configure
@@ -88,7 +92,13 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/gtk-doc/html/%{name}-2.4
 
 %changelog
-* Wed Jul 20 2011 Dan Winship <danw@redhat.com> - 2.28.2-1.1
+* Thu Aug 30 2012 Dan Winship <danw@redhat.com> - 2.28.2-4
+- Fix infinite retry of non-resposive conection (rh#746587)
+
+* Wed Jun 27 2012 Dan Winship <danw@redhat.com> - 2.28.2-3
+- Fix crash when cancelling during socket connection (rh#657622)
+
+* Wed Jul 20 2011 Dan Winship <danw@redhat.com> - 2.28.2-2
 - Patch for CVE-2011-2524
 
 * Mon Jan  4 2010 Matthias Clasen <mclasen@redhat.com> - 2.28.2-1
