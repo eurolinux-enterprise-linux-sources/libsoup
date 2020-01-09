@@ -7,18 +7,32 @@
 #ifndef SOUP_MESSAGE_QUEUE_H
 #define SOUP_MESSAGE_QUEUE_H 1
 
-#include <glib.h>
-#include <gio/gio.h>
-#include <libsoup/soup-connection.h>
-#include <libsoup/soup-message.h>
-#include <libsoup/soup-session.h>
+#include "soup-connection.h"
+#include "soup-message.h"
+#include "soup-session.h"
 
 G_BEGIN_DECLS
 
-typedef struct SoupMessageQueue SoupMessageQueue; 
-typedef struct SoupMessageQueueItem SoupMessageQueueItem;
+typedef enum {
+	SOUP_MESSAGE_STARTING,
+	SOUP_MESSAGE_RESOLVING_PROXY_URI,
+	SOUP_MESSAGE_RESOLVED_PROXY_URI,
+	SOUP_MESSAGE_RESOLVING_PROXY_ADDRESS,
+	SOUP_MESSAGE_RESOLVED_PROXY_ADDRESS,
+	SOUP_MESSAGE_AWAITING_CONNECTION,
+	SOUP_MESSAGE_GOT_CONNECTION,
+	SOUP_MESSAGE_CONNECTING,
+	SOUP_MESSAGE_CONNECTED,
+	SOUP_MESSAGE_TUNNELING,
+	SOUP_MESSAGE_TUNNELED,
+	SOUP_MESSAGE_READY,
+	SOUP_MESSAGE_RUNNING,
+	SOUP_MESSAGE_RESTARTING,
+	SOUP_MESSAGE_FINISHING,
+	SOUP_MESSAGE_FINISHED
+} SoupMessageQueueItemState;
 
-struct SoupMessageQueueItem {
+struct _SoupMessageQueueItem {
 	/*< public >*/
 	SoupSession *session;
 	SoupMessageQueue *queue;
@@ -31,13 +45,15 @@ struct SoupMessageQueueItem {
 	SoupURI *proxy_uri;
 	SoupConnection *conn;
 
-	guint resolving_proxy_addr : 1;
-	guint resolved_proxy_addr  : 1;
+	guint redirection_count;
+
+	SoupMessageQueueItemState state;
 
 	/*< private >*/
 	guint removed              : 1;
-	guint ref_count            : 29;
+	guint ref_count            : 31;
 	SoupMessageQueueItem *prev, *next;
+	SoupMessageQueueItem *related;
 };
 
 SoupMessageQueue     *soup_message_queue_new        (SoupSession          *session);
@@ -60,6 +76,7 @@ void                  soup_message_queue_item_ref   (SoupMessageQueueItem *item)
 void                  soup_message_queue_item_unref (SoupMessageQueueItem *item);
 
 void                  soup_message_queue_destroy    (SoupMessageQueue     *queue);
+
 
 G_END_DECLS
 

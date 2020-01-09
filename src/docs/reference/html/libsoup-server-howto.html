@@ -3,20 +3,13 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>Soup Server Basics</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.75.2">
+<meta name="generator" content="DocBook XSL Stylesheets V1.76.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch01.html" title="Tutorial">
 <link rel="prev" href="libsoup-client-howto.html" title="Soup Client Basics">
 <link rel="next" href="libsoup-porting-2.2-2.4.html" title="libsoup 2.2 to 2.4 porting notes">
-<meta name="generator" content="GTK-Doc V1.11 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.17 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
-<link rel="chapter" href="ch01.html" title="Tutorial">
-<link rel="chapter" href="ch02.html" title="Core API">
-<link rel="chapter" href="ch03.html" title="Additional Features">
-<link rel="chapter" href="ch04.html" title="Web Services APIs">
-<link rel="chapter" href="ch05.html" title="GNOME integration">
-<link rel="chapter" href="ch06.html" title="Low-level Networking API">
-<link rel="index" href="ix01.html" title="Index">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
 <table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2"><tr valign="middle">
@@ -26,7 +19,7 @@
 <th width="100%" align="center">libsoup Reference Manual</th>
 <td><a accesskey="n" href="libsoup-porting-2.2-2.4.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
 </tr></table>
-<div class="refentry" title="Soup Server Basics">
+<div class="refentry">
 <a name="libsoup-server-howto"></a><div class="titlepage"></div>
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
@@ -35,8 +28,8 @@
 </td>
 <td valign="top" align="right"></td>
 </tr></table></div>
-<div class="refsect2" title="Creating a SoupSession">
-<a name="id2933169"></a><h3>Creating a SoupSession</h3>
+<div class="refsect2">
+<a name="id512608"></a><h3>Creating a SoupSession</h3>
 <p>
 As with the client API, there is a single object that will encapsulate
 most of your interactions with libsoup. In this case, <a class="link" href="SoupServer.html" title="SoupServer"><span class="type">SoupServer</span></a>.
@@ -50,7 +43,7 @@ various additional options:
 <col align="left" valign="top">
 <tbody>
 <tr>
-<td><p><span class="term"><a class="link" href="SoupServer.html#SOUP-SERVER-PORT--CAPS" title="SOUP_SERVER_PORT"><code class="literal">SOUP_SERVER_PORT</code></a></span></p></td>
+<td><p><span class="term"><code class="literal">SOUP_SERVER_PORT</code></span></p></td>
 <td><p>
 	    The TCP port to listen on. If <code class="literal">0</code> (or
 	    left unspecified), some unused port will be selected for
@@ -58,7 +51,7 @@ various additional options:
 	</p></td>
 </tr>
 <tr>
-<td><p><span class="term"><a class="link" href="SoupServer.html#SOUP-SERVER-INTERFACE--CAPS" title="SOUP_SERVER_INTERFACE"><code class="literal">SOUP_SERVER_INTERFACE</code></a></span></p></td>
+<td><p><span class="term"><code class="literal">SOUP_SERVER_INTERFACE</code></span></p></td>
 <td><p>
 	    A <a class="link" href="SoupAddress.html" title="SoupAddress"><span class="type">SoupAddress</span></a>,
 	    specifying the IP address of the network interface to run
@@ -67,7 +60,7 @@ various additional options:
 	</p></td>
 </tr>
 <tr>
-<td><p><span class="term"><a class="link" href="SoupServer.html#SOUP-SERVER-SSL-CERT-FILE--CAPS" title="SOUP_SERVER_SSL_CERT_FILE"><code class="literal">SOUP_SERVER_SSL_CERT_FILE</code></a></span></p></td>
+<td><p><span class="term"><code class="literal">SOUP_SERVER_SSL_CERT_FILE</code></span></p></td>
 <td><p>
 	    Points to a file containing an SSL certificate to use. If
 	    this is set, then the server will speak HTTPS; otherwise
@@ -75,7 +68,7 @@ various additional options:
 	</p></td>
 </tr>
 <tr>
-<td><p><span class="term"><a class="link" href="SoupServer.html#SOUP-SERVER-SSL-KEY-FILE--CAPS" title="SOUP_SERVER_SSL_KEY_FILE"><code class="literal">SOUP_SERVER_SSL_KEY_FILE</code></a></span></p></td>
+<td><p><span class="term"><code class="literal">SOUP_SERVER_SSL_KEY_FILE</code></span></p></td>
 <td><p>
 	    Points to a file containing the private key for the
 	    <code class="literal">SOUP_SERVER_SSL_CERT_FILE</code>. (It may
@@ -83,18 +76,16 @@ various additional options:
 	</p></td>
 </tr>
 <tr>
-<td><p><span class="term"><a class="link" href="SoupServer.html#SOUP-SERVER-ASYNC-CONTEXT--CAPS" title="SOUP_SERVER_ASYNC_CONTEXT"><code class="literal">SOUP_SERVER_ASYNC_CONTEXT</code></a></span></p></td>
+<td><p><span class="term"><code class="literal">SOUP_SERVER_ASYNC_CONTEXT</code></span></p></td>
 <td><p>
-	    A <a
-href="http://library.gnome.org/devel/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"
-><span class="type">GMainContext</span></a> which
+	    A <a href="http://library.gnome.org/devel/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a> which
 	    the server will use for asynchronous operations. This can
 	    be set if you want to use a SoupServer in a thread
 	    other than the main thread.
 	</p></td>
 </tr>
 <tr>
-<td><p><span class="term"><a class="link" href="SoupServer.html#SOUP-SERVER-RAW-PATHS--CAPS" title="SOUP_SERVER_RAW_PATHS"><code class="literal">SOUP_SERVER_RAW_PATHS</code></a></span></p></td>
+<td><p><span class="term"><code class="literal">SOUP_SERVER_RAW_PATHS</code></span></p></td>
 <td><p>
 	    Set this to <code class="literal">TRUE</code> if you don't want
 	    <span class="application">libsoup</span> to decode %-encoding
@@ -107,8 +98,8 @@ href="http://library.gnome.org/devel/glib/unstable/glib-The-Main-Event-Loop.html
 </table></div>
 </div>
 <hr>
-<div class="refsect2" title="Adding Handlers">
-<a name="id2937147"></a><h3>Adding Handlers</h3>
+<div class="refsect2">
+<a name="id483425"></a><h3>Adding Handlers</h3>
 <p>
 By default, <a class="link" href="SoupServer.html" title="SoupServer"><span class="type">SoupServer</span></a>
 returns "404 Not Found" in response to all requests (except ones that
@@ -116,10 +107,19 @@ it can't parse, which get "400 Bad Request"). To override this
 behavior, call <a class="link" href="SoupServer.html#soup-server-add-handler" title="soup_server_add_handler ()"><code class="function">soup_server_add_handler</code></a>
 to set a callback to handle certain URI paths.
 </p>
-<div class="informalexample"><pre class="programlisting">
-	soup_server_add_handler (server, "/foo", server_callback,
-				 data, destroy_notify);
-</pre></div>
+<div class="informalexample">
+  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
+    <tbody>
+      <tr>
+        <td class="listing_lines" align="right"><pre>1
+2</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="function"><a href="SoupServer.html#soup-server-add-handler">soup_server_add_handler</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"/foo"</span><span class="symbol">,</span><span class="normal"> server_callback</span><span class="symbol">,</span>
+<span class="normal">             data</span><span class="symbol">,</span><span class="normal"> destroy_notify</span><span class="symbol">);</span></pre></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <p>
 The <code class="literal">"/foo"</code> indicates the base path for this
 handler. When a request comes in, if there is a handler registered for
@@ -137,30 +137,47 @@ match any other handler.
 </p>
 </div>
 <hr>
-<div class="refsect2" title="Responding to Requests">
-<a name="id2962159"></a><h3>Responding to Requests</h3>
+<div class="refsect2">
+<a name="id511394"></a><h3>Responding to Requests</h3>
 <p>
 A handler callback looks something like this:
 </p>
-<div class="informalexample"><pre class="programlisting">
-static void
-server_callback (SoupServer        *server,
-		 SoupMessage       *msg, 
-		 const char        *path,
-		 GHashTable        *query,
-		 SoupClientContext *client,
-		 gpointer           user_data)
-{
-	...
-}
-</pre></div>
+<div class="informalexample">
+  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
+    <tbody>
+      <tr>
+        <td class="listing_lines" align="right"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9
+10</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">server_callback</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">SoupServer</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">server</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">SoupMessage</span><span class="normal">       </span><span class="symbol">*</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> </span>
+<span class="normal">         </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">path</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">GHashTable</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">query</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">SoupClientContext</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">client</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">gpointer</span><span class="normal">           user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="symbol">...</span>
+<span class="cbracket">}</span></pre></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <p>
 <code class="literal">msg</code> is the request that has been received and
 <code class="literal">user_data</code> is the data that was passed to <a class="link" href="SoupServer.html#soup-server-add-handler" title="soup_server_add_handler ()"><code class="function">soup_server_add_handler</code></a>.
 <code class="literal">path</code> is the path (from <code class="literal">msg</code>'s
 URI), and <code class="literal">query</code> contains the result of parsing the
 URI query field. (It is <code class="literal">NULL</code> if there was no
-query.) <code class="literal">client</code> is a <a class="link" href="SoupServer.html#SoupClientContext" title="SoupClientContext"><span class="type">SoupClientContext</span></a>,
+query.) <code class="literal">client</code> is a <a class="link" href="SoupServer.html#SoupClientContext"><span class="type">SoupClientContext</span></a>,
 which contains additional information about the client (including its
 IP address, and whether or not it used HTTP authentication).
 </p>
@@ -183,58 +200,96 @@ If the response requires a body, you must decide whether to use
 <code class="literal">Content-Length</code> encoding (the default), or
 <code class="literal">chunked</code> encoding.
 </p>
-<div class="refsect3" title="Responding with Content-Length Encoding">
-<a name="id2936394"></a><h4>Responding with <code class="literal">Content-Length</code>
+<div class="refsect3">
+<a name="id482023"></a><h4>Responding with <code class="literal">Content-Length</code>
 Encoding</h4>
 <p>
 This is the simpler way to set a response body, if you have all of the
 data available at once.
 </p>
-<div class="informalexample"><pre class="programlisting">
-static void
-server_callback (SoupServer        *server,
-		 SoupMessage       *msg, 
-		 const char        *path,
-		 GHashTable        *query,
-		 SoupClientContext *client,
-		 gpointer           user_data)
-{
-	MyServerData *server_data = user_data;
-	const char *mime_type;
-	GByteArray *body;
+<div class="informalexample">
+  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
+    <tbody>
+      <tr>
+        <td class="listing_lines" align="right"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">server_callback</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">SoupServer</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">server</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">SoupMessage</span><span class="normal">       </span><span class="symbol">*</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> </span>
+<span class="normal">         </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">path</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">GHashTable</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">query</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">SoupClientContext</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">client</span><span class="symbol">,</span>
+<span class="normal">         </span><span class="usertype">gpointer</span><span class="normal">           user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">MyServerData</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">server_data </span><span class="symbol">=</span><span class="normal"> user_data</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">mime_type</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">GByteArray</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">body</span><span class="symbol">;</span>
 
-	if (msg-&gt;method != SOUP_METHOD_GET) {
-		soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
-		return;
-	}
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">-&gt;</span><span class="normal">method </span><span class="symbol">!=</span><span class="normal"> <a href="libsoup-2.4-soup-method.html#SOUP-METHOD-GET:CAPS">SOUP_METHOD_GET</a></span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> <a href="libsoup-2.4-soup-status.html#SOUP-STATUS-NOT-IMPLEMENTED:CAPS">SOUP_STATUS_NOT_IMPLEMENTED</a></span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
 
-	/* This is somewhat silly. Presumably your server will do
-	 * something more interesting.
-	 */
-	body = g_hash_table_lookup (server_data-&gt;bodies, path);
-	mime_type = g_hash_table_lookup (server_data-&gt;mime_types, path);
-	if (!body || !mime_type) {
-		soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
-		return;
-	}
+<span class="normal">    </span><span class="comment">/* This is somewhat silly. Presumably your server will do</span>
+<span class="comment">     * something more interesting.</span>
+<span class="comment">     */</span>
+<span class="normal">    body </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="http://library.gnome.org/devel/glib/unstable/glib-Hash-Tables.html#g-hash-table-lookup">g_hash_table_lookup</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server_data</span><span class="symbol">-&gt;</span><span class="normal">bodies</span><span class="symbol">,</span><span class="normal"> path</span><span class="symbol">);</span>
+<span class="normal">    mime_type </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="http://library.gnome.org/devel/glib/unstable/glib-Hash-Tables.html#g-hash-table-lookup">g_hash_table_lookup</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server_data</span><span class="symbol">-&gt;</span><span class="normal">mime_types</span><span class="symbol">,</span><span class="normal"> path</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">body </span><span class="symbol">||</span><span class="normal"> </span><span class="symbol">!</span><span class="normal">mime_type</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> <a href="libsoup-2.4-soup-status.html#SOUP-STATUS-NOT-FOUND:CAPS">SOUP_STATUS_NOT_FOUND</a></span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
 
-	soup_message_set_status (msg, SOUP_STATUS_OK);
-	soup_message_set_response (msg, mime_type, SOUP_MEMORY_COPY,
-				   body-&gt;data, body-&gt;len);
-}
-</pre></div>
+<span class="normal">    </span><span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> <a href="libsoup-2.4-soup-status.html#SOUP-STATUS-OK:CAPS">SOUP_STATUS_OK</a></span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="SoupMessage.html#soup-message-set-response">soup_message_set_response</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> mime_type</span><span class="symbol">,</span><span class="normal"> <a href="SoupMessageBody.html#SOUP-MEMORY-COPY:CAPS">SOUP_MEMORY_COPY</a></span><span class="symbol">,</span>
+<span class="normal">                   body</span><span class="symbol">-&gt;</span><span class="normal">data</span><span class="symbol">,</span><span class="normal"> body</span><span class="symbol">-&gt;</span><span class="normal">len</span><span class="symbol">);</span>
+<span class="cbracket">}</span></pre></td>
+      </tr>
+    </tbody>
+  </table>
 </div>
-<div class="refsect3" title="Responding with chunked Encoding">
-<a name="id2936434"></a><h4>Responding with <code class="literal">chunked</code> Encoding</h4>
+
+</div>
+<div class="refsect3">
+<a name="id482055"></a><h4>Responding with <code class="literal">chunked</code> Encoding</h4>
 <p>
 If you want to supply the response body in chunks as it becomes
 available, use <code class="literal">chunked</code> encoding instead. In this
-case, first call <a class="link" href="libsoup-24-SoupMessageHeaders.html#soup-message-headers-set-encoding" title="soup_message_headers_set_encoding ()"><code class="function">soup_message_headers_set_encoding</code></a> <code class="literal">(msg-&gt;response_headers, <a class="link" href="libsoup-24-SoupMessageHeaders.html#SoupEncoding" title="enum SoupEncoding">SOUP_ENCODING_CHUNKED</a>)</code>
+case, first call <a class="link" href="SoupMessageHeaders.html#soup-message-headers-set-encoding" title="soup_message_headers_set_encoding ()"><code class="function">soup_message_headers_set_encoding</code></a> <code class="literal">(msg-&gt;response_headers, <a class="link" href="SoupMessageHeaders.html#SoupEncoding" title="enum SoupEncoding">SOUP_ENCODING_CHUNKED</a>)</code>
 to tell <span class="application">libsoup</span> that you'll be using
-chunked encoding. Then call <a class="link" href="libsoup-24-SoupMessageBody.html#soup-message-body-append" title="soup_message_body_append ()"><code class="function">soup_message_body_append</code></a>
-(or <a class="link" href="libsoup-24-SoupMessageBody.html#soup-message-body-append-buffer" title="soup_message_body_append_buffer ()"><code class="function">soup_message_body_append_buffer</code></a>)
+chunked encoding. Then call <a class="link" href="SoupMessageBody.html#soup-message-body-append" title="soup_message_body_append ()"><code class="function">soup_message_body_append</code></a>
+(or <a class="link" href="SoupMessageBody.html#soup-message-body-append-buffer" title="soup_message_body_append_buffer ()"><code class="function">soup_message_body_append_buffer</code></a>)
 on <code class="literal">msg-&gt;response_body</code> with each chunk of the
-response body as it becomes available, and call <a class="link" href="libsoup-24-SoupMessageBody.html#soup-message-body-complete" title="soup_message_body_complete ()"><code class="function">soup_message_body_complete</code></a>
+response body as it becomes available, and call <a class="link" href="SoupMessageBody.html#soup-message-body-complete" title="soup_message_body_complete ()"><code class="function">soup_message_body_complete</code></a>
 when the response is complete. After each of these calls, you must
 also call <a class="link" href="SoupServer.html#soup-server-unpause-message" title="soup_server_unpause_message ()"><code class="function">soup_server_unpause_message</code></a>
 to cause the chunk to be sent. (You do not normally need to call <a class="link" href="SoupServer.html#soup-server-pause-message" title="soup_server_pause_message ()"><code class="function">soup_server_pause_message</code></a>,
@@ -258,51 +313,93 @@ using <code class="literal">chunked</code> encoding.
 </div>
 </div>
 <hr>
-<div class="refsect2" title="Handling Authentication">
-<a name="id2942424"></a><h3>Handling Authentication</h3>
+<div class="refsect2">
+<a name="id482211"></a><h3>Handling Authentication</h3>
 <p>
 To have <a class="link" href="SoupServer.html" title="SoupServer"><span class="type">SoupServer</span></a>
 handle HTTP authentication for you, create a <a class="link" href="SoupAuthDomainBasic.html" title="SoupAuthDomainBasic"><span class="type">SoupAuthDomainBasic</span></a>
 or <a class="link" href="SoupAuthDomainDigest.html" title="SoupAuthDomainDigest"><span class="type">SoupAuthDomainDigest</span></a>,
 and pass it to <a class="link" href="SoupServer.html#soup-server-add-auth-domain" title="soup_server_add_auth_domain ()"><code class="function">soup_server_add_auth_domain</code></a>:
 </p>
-<div class="informalexample"><pre class="programlisting">
-	SoupAuthDomain *domain;
+<div class="informalexample">
+  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
+    <tbody>
+      <tr>
+        <td class="listing_lines" align="right"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="usertype">SoupAuthDomain</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">domain</span><span class="symbol">;</span>
 
-	domain = soup_auth_domain_basic_new (
-		SOUP_AUTH_DOMAIN_REALM, "My Realm",
-		SOUP_AUTH_DOMAIN_BASIC_AUTH_CALLBACK, auth_callback,
-		SOUP_AUTH_DOMAIN_BASIC_AUTH_DATA, auth_data,
-		SOUP_AUTH_DOMAIN_ADD_PATH, "/foo",
-		SOUP_AUTH_DOMAIN_ADD_PATH, "/bar/private",
-		NULL);
-	soup_server_add_auth_domain (server, domain);
-	g_object_unref (domain);
-</pre></div>
+<span class="normal">domain </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="SoupAuthDomainBasic.html#soup-auth-domain-basic-new">soup_auth_domain_basic_new</a></span><span class="normal"> </span><span class="symbol">(</span>
+<span class="normal">    <a href="SoupAuthDomain.html#SOUP-AUTH-DOMAIN-REALM:CAPS">SOUP_AUTH_DOMAIN_REALM</a></span><span class="symbol">,</span><span class="normal"> </span><span class="string">"My Realm"</span><span class="symbol">,</span>
+<span class="normal">    <a href="SoupAuthDomainBasic.html#SOUP-AUTH-DOMAIN-BASIC-AUTH-CALLBACK:CAPS">SOUP_AUTH_DOMAIN_BASIC_AUTH_CALLBACK</a></span><span class="symbol">,</span><span class="normal"> auth_callback</span><span class="symbol">,</span>
+<span class="normal">    <a href="SoupAuthDomainBasic.html#SOUP-AUTH-DOMAIN-BASIC-AUTH-DATA:CAPS">SOUP_AUTH_DOMAIN_BASIC_AUTH_DATA</a></span><span class="symbol">,</span><span class="normal"> auth_data</span><span class="symbol">,</span>
+<span class="normal">    <a href="SoupAuthDomain.html#SOUP-AUTH-DOMAIN-ADD-PATH:CAPS">SOUP_AUTH_DOMAIN_ADD_PATH</a></span><span class="symbol">,</span><span class="normal"> </span><span class="string">"/foo"</span><span class="symbol">,</span>
+<span class="normal">    <a href="SoupAuthDomain.html#SOUP-AUTH-DOMAIN-ADD-PATH:CAPS">SOUP_AUTH_DOMAIN_ADD_PATH</a></span><span class="symbol">,</span><span class="normal"> </span><span class="string">"/bar/private"</span><span class="symbol">,</span>
+<span class="normal">    <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
+<span class="function"><a href="SoupServer.html#soup-server-add-auth-domain">soup_server_add_auth_domain</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server</span><span class="symbol">,</span><span class="normal"> domain</span><span class="symbol">);</span>
+<span class="function"><a href="http://library.gnome.org/devel/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">domain</span><span class="symbol">);</span></pre></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <p>
 Then, every request under one of the auth domain's paths will be
 passed to the <code class="literal">auth_callback</code> first before being
 passed to the <code class="literal">server_callback</code>:
 </p>
-<div class="informalexample"><pre class="programlisting">
-static gboolean
-auth_callback (SoupAuthDomain *domain, SoupMessage *msg,
-	       const char *username, const char *password,
-	       gpointer user_data)
-{
-	MyServerData *server_data = user_data;
-	MyUserData *user;
+<div class="informalexample">
+  <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
+    <tbody>
+      <tr>
+        <td class="listing_lines" align="right"><pre>1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> <a href="http://library.gnome.org/devel/glib/unstable/glib-Basic-Types.html#gboolean">gboolean</a></span>
+<span class="function">auth_callback</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">SoupAuthDomain</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">domain</span><span class="symbol">,</span><span class="normal"> </span><span class="usertype">SoupMessage</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">msg</span><span class="symbol">,</span>
+<span class="normal">           </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">username</span><span class="symbol">,</span><span class="normal"> </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">password</span><span class="symbol">,</span>
+<span class="normal">           </span><span class="usertype">gpointer</span><span class="normal"> user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">MyServerData</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">server_data </span><span class="symbol">=</span><span class="normal"> user_data</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">MyUserData</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">user</span><span class="symbol">;</span>
 
-	user = my_server_data_lookup_user (server_data, username);
-	if (!user)
-		return FALSE;
+<span class="normal">    user </span><span class="symbol">=</span><span class="normal"> </span><span class="function">my_server_data_lookup_user</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server_data</span><span class="symbol">,</span><span class="normal"> username</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">user</span><span class="symbol">)</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="normal"> <a href="http://library.gnome.org/devel/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS">FALSE</a></span><span class="symbol">;</span>
 
-	/* FIXME: Don't do this. Keeping a cleartext password database
-	 * is bad.
-	 */
-	return strcmp (password, user-&gt;password) == 0;
-}
-</pre></div>
+<span class="normal">    </span><span class="comment">/* </span><span class="todo">FIXME:</span><span class="comment"> Don't do this. Keeping a cleartext password database</span>
+<span class="comment">     * is bad.</span>
+<span class="comment">     */</span>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> </span><span class="function">strcmp</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">password</span><span class="symbol">,</span><span class="normal"> user</span><span class="symbol">-&gt;</span><span class="normal">password</span><span class="symbol">)</span><span class="normal"> </span><span class="symbol">==</span><span class="normal"> </span><span class="number">0</span><span class="symbol">;</span>
+<span class="cbracket">}</span></pre></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
 <p>
 The <a class="link" href="SoupAuthDomainBasic.html#SoupAuthDomainBasicAuthCallback" title="SoupAuthDomainBasicAuthCallback ()"><span class="type">SoupAuthDomainBasicAuthCallback</span></a>
 is given the username and password from the
@@ -339,6 +436,6 @@ certain path, but not all of them (eg, you want to authenticate
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.11</div>
+          Generated by GTK-Doc V1.17</div>
 </body>
 </html>

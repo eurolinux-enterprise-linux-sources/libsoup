@@ -408,7 +408,8 @@ typedef struct {
 
 /**
  * soup_message_headers_iter_init:
- * @iter: a pointer to a %SoupMessageHeadersIter structure
+ * @iter: (out) (transfer none): a pointer to a %SoupMessageHeadersIter
+ * structure
  * @hdrs: a %SoupMessageHeaders
  *
  * Initializes @iter for iterating @hdrs.
@@ -425,9 +426,11 @@ soup_message_headers_iter_init (SoupMessageHeadersIter *iter,
 
 /**
  * soup_message_headers_iter_next:
- * @iter: a %SoupMessageHeadersIter
- * @name: pointer to a variable to return the header name in
- * @value: pointer to a variable to return the header value in
+ * @iter: (inout) (transfer none): a %SoupMessageHeadersIter
+ * @name: (out) (transfer none): pointer to a variable to return
+ * the header name in
+ * @value: (out) (transfer none): pointer to a variable to return
+ * the header value in
  *
  * Yields the next name/value pair in the %SoupMessageHeaders being
  * iterated by @iter. If @iter has already yielded the last header,
@@ -465,7 +468,7 @@ soup_message_headers_iter_next (SoupMessageHeadersIter *iter,
 /**
  * soup_message_headers_foreach:
  * @hdrs: a #SoupMessageHeaders
- * @func: callback function to run for each header
+ * @func: (scope call): callback function to run for each header
  * @user_data: data to pass to @func
  * 
  * Calls @func once for each header value in @hdrs.
@@ -1184,7 +1187,7 @@ content_type_setter (SoupMessageHeaders *hdrs, const char *value)
 /**
  * soup_message_headers_get_content_type:
  * @hdrs: a #SoupMessageHeaders
- * @params: return location for the Content-Type parameters (eg,
+ * @params: (out) (allow-none): return location for the Content-Type parameters (eg,
  * "charset"), or %NULL
  *
  * Looks up the "Content-Type" header in @hdrs, parses it, and returns

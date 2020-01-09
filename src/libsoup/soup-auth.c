@@ -47,7 +47,7 @@ typedef struct {
 } SoupAuthPrivate;
 #define SOUP_AUTH_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SOUP_TYPE_AUTH, SoupAuthPrivate))
 
-G_DEFINE_TYPE (SoupAuth, soup_auth, G_TYPE_OBJECT)
+G_DEFINE_ABSTRACT_TYPE (SoupAuth, soup_auth, G_TYPE_OBJECT)
 
 enum {
 	SAVE_PASSWORD,
@@ -518,8 +518,8 @@ soup_auth_get_authorization (SoupAuth *auth, SoupMessage *msg)
  * of @auth's protection space, unless otherwise discovered not to
  * be.)
  *
- * Return value: the list of paths, which must be freed with
- * soup_auth_free_protection_space().
+ * Return value: (element-type utf8) (transfer full): the list of
+ * paths, which can be freed with soup_auth_free_protection_space().
  **/
 GSList *
 soup_auth_get_protection_space (SoupAuth *auth, SoupURI *source_uri)
@@ -531,7 +531,7 @@ soup_auth_get_protection_space (SoupAuth *auth, SoupURI *source_uri)
 }
 
 /**
- * soup_auth_free_protection_space:
+ * soup_auth_free_protection_space: (skip)
  * @auth: a #SoupAuth
  * @space: the return value from soup_auth_get_protection_space()
  *
@@ -555,8 +555,9 @@ soup_auth_free_protection_space (SoupAuth *auth, GSList *space)
  * (If the session is not configured to save passwords, this will
  * always be %NULL.)
  *
- * Return value: the list of usernames. You must free the list with
- * g_slist_free(), but do not free or modify the contents.
+ * Return value: (transfer container): the list of usernames. You must
+ * free the list with g_slist_free(), but do not free or modify the
+ * contents.
  *
  * Since: 2.28
  **/

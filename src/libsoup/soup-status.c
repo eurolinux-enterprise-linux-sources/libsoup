@@ -5,6 +5,8 @@
  * Copyright (C) 2001-2003, Ximian, Inc.
  */
 
+#include "config.h"
+
 #include <glib.h>
 
 #include "soup-status.h"
@@ -77,7 +79,8 @@
  * @SOUP_STATUS_IO_ERROR: A network error occurred, or the other end
  * closed the connection unexpectedly
  * @SOUP_STATUS_MALFORMED: Malformed data (usually a programmer error)
- * @SOUP_STATUS_TRY_AGAIN: Formerly used internally. Now unused.
+ * @SOUP_STATUS_TRY_AGAIN: Used internally
+ * @SOUP_STATUS_TOO_MANY_REDIRECTS: There were too many redirections
  * @SOUP_STATUS_CONTINUE: 100 Continue (HTTP)
  * @SOUP_STATUS_SWITCHING_PROTOCOLS: 101 Switching Protocols (HTTP)
  * @SOUP_STATUS_PROCESSING: 102 Processing (WebDAV)
@@ -178,13 +181,10 @@ static const struct {
 	{ SOUP_STATUS_CANT_RESOLVE_PROXY,         "Cannot resolve proxy hostname" },
 	{ SOUP_STATUS_CANT_CONNECT,               "Cannot connect to destination" },
 	{ SOUP_STATUS_CANT_CONNECT_PROXY,         "Cannot connect to proxy" },
-#ifdef HAVE_SSL
 	{ SOUP_STATUS_SSL_FAILED,                 "SSL handshake failed" },
-#else
-	{ SOUP_STATUS_SSL_FAILED,                 "SSL support not available" },
-#endif
 	{ SOUP_STATUS_IO_ERROR,                   "Connection terminated unexpectedly" },
 	{ SOUP_STATUS_MALFORMED,                  "Message Corrupt" },
+	{ SOUP_STATUS_TOO_MANY_REDIRECTS,         "Too many redirects" },
 
 	/* Informational */
 	{ SOUP_STATUS_CONTINUE,                   "Continue" },

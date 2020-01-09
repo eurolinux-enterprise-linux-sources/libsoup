@@ -66,15 +66,20 @@ typedef struct {
 	guint        num_conns;
 
 	guint        num_messages;
+
+	SoupHTTPVersion http_version;
 } SoupSessionHost;
 
 typedef struct {
 	char *ssl_ca_file;
 	SoupSSLCredentials *ssl_creds;
+	gboolean ssl_strict;
 
 	SoupMessageQueue *queue;
 
 	char *user_agent;
+	char *accept_language;
+	gboolean accept_language_auto;
 
 	GSList *features;
 	GHashTable *features_cache;
@@ -106,6 +111,7 @@ static void cancel_message  (SoupSession *session, SoupMessage *msg,
 			     guint status_code);
 static void auth_required   (SoupSession *session, SoupMessage *msg,
 			     SoupAuth *auth, gboolean retrying);
+static void flush_queue     (SoupSession *session);
 
 static void auth_manager_authenticate (SoupAuthManager *manager,
 				       SoupMessage *msg, SoupAuth *auth,
@@ -114,15 +120,19 @@ static void auth_manager_authenticate (SoupAuthManager *manager,
 #define SOUP_SESSION_MAX_CONNS_DEFAULT 10
 #define SOUP_SESSION_MAX_CONNS_PER_HOST_DEFAULT 2
 
+#define SOUP_SESSION_MAX_REDIRECTION_COUNT 20
+
 #define SOUP_SESSION_USER_AGENT_BASE "libsoup/" PACKAGE_VERSION
 
-G_DEFINE_TYPE (SoupSession, soup_session, G_TYPE_OBJECT)
+G_DEFINE_ABSTRACT_TYPE (SoupSession, soup_session, G_TYPE_OBJECT)
 
 enum {
 	REQUEST_QUEUED,
 	REQUEST_STARTED,
 	REQUEST_UNQUEUED,
 	AUTHENTICATE,
+	CONNECTION_CREATED,
+	TUNNELING,
 	LAST_SIGNAL
 };
 
@@ -136,9 +146,12 @@ enum {
 	PROP_MAX_CONNS_PER_HOST,
 	PROP_USE_NTLM,
 	PROP_SSL_CA_FILE,
+	PROP_SSL_STRICT,
 	PROP_ASYNC_CONTEXT,
 	PROP_TIMEOUT,
 	PROP_USER_AGENT,
+	PROP_ACCEPT_LANGUAGE,
+	PROP_ACCEPT_LANGUAGE_AUTO,
 	PROP_IDLE_TIMEOUT,
 	PROP_ADD_FEATURE,
 	PROP_ADD_FEATURE_BY_TYPE,
@@ -171,13 +184,13 @@ soup_session_init (SoupSession *session)
 
 	priv->features_cache = g_hash_table_new (NULL, NULL);
 
-	auth_manager = g_object_new (SOUP_TYPE_AUTH_MANAGER_NTLM,
-				     SOUP_AUTH_MANAGER_NTLM_USE_NTLM, FALSE,
-				     NULL);
+	auth_manager = g_object_new (SOUP_TYPE_AUTH_MANAGER_NTLM, NULL);
 	g_signal_connect (auth_manager, "authenticate",
 			  G_CALLBACK (auth_manager_authenticate), session);
-	soup_auth_manager_add_type (auth_manager, SOUP_TYPE_AUTH_BASIC);
-	soup_auth_manager_add_type (auth_manager, SOUP_TYPE_AUTH_DIGEST);
+	soup_session_feature_add_feature (SOUP_SESSION_FEATURE (auth_manager),
+					  SOUP_TYPE_AUTH_BASIC);
+	soup_session_feature_add_feature (SOUP_SESSION_FEATURE (auth_manager),
+					  SOUP_TYPE_AUTH_DIGEST);
 	soup_session_add_feature (session, SOUP_SESSION_FEATURE (auth_manager));
 	g_object_unref (auth_manager);
 
@@ -185,6 +198,8 @@ soup_session_init (SoupSession *session)
 	 * so hold a ref on the default GResolver.
 	 */
 	priv->resolver = g_resolver_get_default ();
+
+	priv->ssl_strict = TRUE;
 }
 
 static void
@@ -214,7 +229,10 @@ finalize (GObject *object)
 	g_hash_table_destroy (priv->conns);
 
 	g_free (priv->user_agent);
+	g_free (priv->accept_language);
 
+	if (priv->ssl_ca_file)
+		g_free (priv->ssl_ca_file);
 	if (priv->ssl_creds)
 		soup_ssl_free_client_credentials (priv->ssl_creds);
 
@@ -240,6 +258,7 @@ soup_session_class_init (SoupSessionClass *session_class)
 	session_class->requeue_message = requeue_message;
 	session_class->cancel_message = cancel_message;
 	session_class->auth_required = auth_required;
+	session_class->flush_queue = flush_queue;
 
 	/* virtual method override */
 	object_class->dispose = dispose;
@@ -380,6 +399,33 @@ soup_session_class_init (SoupSessionClass *session_class)
 			      SOUP_TYPE_AUTH,
 			      G_TYPE_BOOLEAN);
 
+	signals[CONNECTION_CREATED] =
+		g_signal_new ("connection-created",
+			      G_OBJECT_CLASS_TYPE (object_class),
+			      G_SIGNAL_RUN_FIRST,
+			      0,
+			      NULL, NULL,
+			      soup_marshal_NONE__OBJECT,
+			      G_TYPE_NONE, 1,
+			      /* SoupConnection is private, so we can't use
+			       * SOUP_TYPE_CONNECTION here.
+			       */
+			      G_TYPE_OBJECT);
+
+	signals[TUNNELING] =
+		g_signal_new ("tunneling",
+			      G_OBJECT_CLASS_TYPE (object_class),
+			      G_SIGNAL_RUN_FIRST,
+			      0,
+			      NULL, NULL,
+			      soup_marshal_NONE__OBJECT,
+			      G_TYPE_NONE, 1,
+			      /* SoupConnection is private, so we can't use
+			       * SOUP_TYPE_CONNECTION here.
+			       */
+			      G_TYPE_OBJECT);
+
+
 	/* properties */
 	/**
 	 * SOUP_SESSION_PROXY_URI:
@@ -448,6 +494,14 @@ soup_session_class_init (SoupSessionClass *session_class)
 				   0, G_MAXUINT, 0,
 				   G_PARAM_READWRITE));
 	/**
+	 * SoupSession:use-ntlm:
+	 *
+	 * Whether or not to use NTLM authentication.
+	 *
+	 * Deprecated: use soup_session_add_feature_by_type() with
+	 * #SOUP_TYPE_AUTH_NTLM.
+	 **/
+	/**
 	 * SOUP_SESSION_USE_NTLM:
 	 *
 	 * Alias for the #SoupSession:use-ntlm property. (Whether or
@@ -473,6 +527,24 @@ soup_session_class_init (SoupSessionClass *session_class)
 				     "File containing SSL CA certificates",
 				     NULL,
 				     G_PARAM_READWRITE));
+	/**
+	 * SOUP_SESSION_SSL_STRICT:
+	 *
+	 * Alias for the #SoupSession:ignore-ssl-cert-errors
+	 * property. By default, when validating certificates against
+	 * a CA file, Soup will consider invalid certificates as a
+	 * connection error. Setting this property to %TRUE makes soup
+	 * ignore the errors, and make the connection.
+	 *
+	 * Since: 2.30
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_SSL_STRICT,
+		g_param_spec_boolean (SOUP_SESSION_SSL_STRICT,
+				      "Strictly validate SSL certificates",
+				      "Whether certificate errors should be considered a connection error",
+				      TRUE,
+				      G_PARAM_READWRITE));
 	/**
 	 * SOUP_SESSION_ASYNC_CONTEXT:
 	 *
@@ -538,6 +610,55 @@ soup_session_class_init (SoupSessionClass *session_class)
 				     "User-Agent string",
 				     NULL,
 				     G_PARAM_READWRITE));
+
+	/**
+	 * SoupSession:accept-language:
+	 *
+	 * If non-%NULL, the value to use for the "Accept-Language" header
+	 * on #SoupMessage<!-- -->s sent from this session.
+	 *
+	 * Setting this will disable
+	 * #SoupSession:accept-language-auto.
+	 *
+	 * Since: 2.30
+	 **/
+	/**
+	 * SOUP_SESSION_ACCEPT_LANGUAGE:
+	 *
+	 * Alias for the #SoupSession:accept-language property, qv.
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_ACCEPT_LANGUAGE,
+		g_param_spec_string (SOUP_SESSION_ACCEPT_LANGUAGE,
+				     "Accept-Language string",
+				     "Accept-Language string",
+				     NULL,
+				     G_PARAM_READWRITE));
+
+	/**
+	 * SoupSession:accept-language-auto:
+	 *
+	 * If %TRUE, #SoupSession will automatically set the string
+	 * for the "Accept-Language" header on every #SoupMessage
+	 * sent, based on the return value of g_get_language_names().
+	 *
+	 * Setting this will override any previous value of
+	 * #SoupSession:accept-language.
+	 *
+	 * Since: 2.30
+	 **/
+	/**
+	 * SOUP_SESSION_ACCEPT_LANGUAGE_AUTO:
+	 *
+	 * Alias for the #SoupSession:accept-language-auto property, qv.
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_ACCEPT_LANGUAGE_AUTO,
+		g_param_spec_boolean (SOUP_SESSION_ACCEPT_LANGUAGE_AUTO,
+				      "Accept-Language automatic mode",
+				      "Accept-Language automatic mode",
+				      FALSE,
+				      G_PARAM_READWRITE));
 
 	/**
 	 * SoupSession:add-feature:
@@ -623,6 +744,89 @@ safe_str_equal (const char *a, const char *b)
 	return strcmp (a, b) == 0;
 }
 
+/* Converts a language in POSIX format and to be RFC2616 compliant    */
+/* Based on code from epiphany-webkit (ephy_langs_append_languages()) */
+static gchar *
+posix_lang_to_rfc2616 (const gchar *language)
+{
+	/* Don't include charset variants, etc */
+	if (strchr (language, '.') || strchr (language, '@'))
+		return NULL;
+
+	/* Ignore "C" locale, which g_get_language_names() always
+	 * includes as a fallback.
+	 */
+	if (!strcmp (language, "C"))
+		return NULL;
+
+	return g_strdelimit (g_ascii_strdown (language, -1), "_", '-');
+}
+
+/* Converts @quality from 0-100 to 0.0-1.0 and appends to @str */
+static gchar *
+add_quality_value (const gchar *str, int quality)
+{
+	g_return_val_if_fail (str != NULL, NULL);
+
+	if (quality >= 0 && quality < 100) {
+		/* We don't use %.02g because of "." vs "," locale issues */
+		if (quality % 10)
+			return g_strdup_printf ("%s;q=0.%02d", str, quality);
+		else
+			return g_strdup_printf ("%s;q=0.%d", str, quality / 10);
+	} else
+		return g_strdup (str);
+}
+
+/* Returns a RFC2616 compliant languages list from system locales */
+static gchar *
+accept_languages_from_system (void)
+{
+	const char * const * lang_names;
+	GPtrArray *langs = NULL;
+	char *lang, **langs_array, *langs_str;
+	int delta;
+	int i;
+
+	lang_names = g_get_language_names ();
+	g_return_val_if_fail (lang_names != NULL, NULL);
+
+	/* Build the array of languages */
+	langs = g_ptr_array_new ();
+	for (i = 0; lang_names[i] != NULL; i++) {
+		lang = posix_lang_to_rfc2616 (lang_names[i]);
+		if (lang)
+			g_ptr_array_add (langs, lang);
+	}
+
+	/* Add quality values */
+	if (langs->len < 10)
+		delta = 10;
+	else if (langs->len < 20)
+		delta = 5;
+	else
+		delta = 1;
+
+	for (i = 0; i < langs->len; i++) {
+		lang = langs->pdata[i];
+		langs->pdata[i] = add_quality_value (lang, 100 - i * delta);
+		g_free (lang);
+	}
+
+	/* Fallback: add "en" if list is empty */
+	if (langs->len == 0)
+		g_ptr_array_add (langs, g_strdup ("en"));
+
+	g_ptr_array_add (langs, NULL);
+	langs_array = (char **)langs->pdata;
+	langs_str = g_strjoinv (", ", langs_array);
+
+	g_strfreev (langs_array);
+	g_ptr_array_free (langs, FALSE);
+
+	return langs_str;
+}
+
 static void
 set_property (GObject *object, guint prop_id,
 	      const GValue *value, GParamSpec *pspec)
@@ -657,9 +861,10 @@ set_property (GObject *object, guint prop_id,
 	case PROP_USE_NTLM:
 		feature = soup_session_get_feature (session, SOUP_TYPE_AUTH_MANAGER_NTLM);
 		if (feature) {
-			g_object_set_property (G_OBJECT (feature),
-					       SOUP_AUTH_MANAGER_NTLM_USE_NTLM,
-					       value);
+			if (g_value_get_boolean (value))
+				soup_session_feature_add_feature (feature, SOUP_TYPE_AUTH_NTLM);
+			else
+				soup_session_feature_remove_feature (feature, SOUP_TYPE_AUTH_NTLM);
 		} else
 			g_warning ("Trying to set use-ntlm on session with no auth-manager");
 		break;
@@ -677,6 +882,9 @@ set_property (GObject *object, guint prop_id,
 			priv->ssl_creds = NULL;
 		}
 
+		break;
+	case PROP_SSL_STRICT:
+		priv->ssl_strict = g_value_get_boolean (value);
 		break;
 	case PROP_ASYNC_CONTEXT:
 		priv->async_context = g_value_get_pointer (value);
@@ -700,6 +908,22 @@ set_property (GObject *object, guint prop_id,
 						 SOUP_SESSION_USER_AGENT_BASE);
 		} else
 			priv->user_agent = g_strdup (user_agent);
+		break;
+	case PROP_ACCEPT_LANGUAGE:
+		g_free (priv->accept_language);
+		priv->accept_language = g_strdup (g_value_get_string (value));
+		priv->accept_language_auto = FALSE;
+		break;
+	case PROP_ACCEPT_LANGUAGE_AUTO:
+		priv->accept_language_auto = g_value_get_boolean (value);
+		if (priv->accept_language) {
+			g_free (priv->accept_language);
+			priv->accept_language = NULL;
+		}
+
+		/* Get languages from system if needed */
+		if (priv->accept_language_auto)
+			priv->accept_language = accept_languages_from_system ();
 		break;
 	case PROP_IDLE_TIMEOUT:
 		priv->idle_timeout = g_value_get_uint (value);
@@ -745,15 +969,16 @@ get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_USE_NTLM:
 		feature = soup_session_get_feature (session, SOUP_TYPE_AUTH_MANAGER_NTLM);
-		if (feature) {
-			g_object_get_property (G_OBJECT (feature),
-					       SOUP_AUTH_MANAGER_NTLM_USE_NTLM,
-					       value);
-		} else
+		if (feature)
+			g_value_set_boolean (value, soup_session_feature_has_feature (feature, SOUP_TYPE_AUTH_NTLM));
+		else
 			g_value_set_boolean (value, FALSE);
 		break;
 	case PROP_SSL_CA_FILE:
 		g_value_set_string (value, priv->ssl_ca_file);
+		break;
+	case PROP_SSL_STRICT:
+		g_value_set_boolean (value, priv->ssl_strict);
 		break;
 	case PROP_ASYNC_CONTEXT:
 		g_value_set_pointer (value, priv->async_context ? g_main_context_ref (priv->async_context) : NULL);
@@ -763,6 +988,12 @@ get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_USER_AGENT:
 		g_value_set_string (value, priv->user_agent);
+		break;
+	case PROP_ACCEPT_LANGUAGE:
+		g_value_set_string (value, priv->accept_language);
+		break;
+	case PROP_ACCEPT_LANGUAGE_AUTO:
+		g_value_set_boolean (value, priv->accept_language_auto);
 		break;
 	case PROP_IDLE_TIMEOUT:
 		g_value_set_uint (value, priv->idle_timeout);
@@ -782,7 +1013,8 @@ get_property (GObject *object, guint prop_id,
  * context, so you will need to ref it yourself if you want it to
  * outlive its session.
  *
- * Return value: @session's #GMainContext, which may be %NULL
+ * Return value: (transfer none): @session's #GMainContext, which may
+ * be %NULL
  **/
 GMainContext *
 soup_session_get_async_context (SoupSession *session)
@@ -805,6 +1037,24 @@ soup_session_host_new (SoupSession *session, SoupURI *uri)
 	host = g_slice_new0 (SoupSessionHost);
 	host->uri = soup_uri_copy_host (uri);
 	host->addr = soup_address_new (host->uri->host, host->uri->port);
+	host->http_version = SOUP_HTTP_1_1;
+
+	return host;
+}
+
+/* Requires host_lock to be locked */
+static SoupSessionHost *
+get_host_for_uri (SoupSession *session, SoupURI *uri)
+{
+	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+	SoupSessionHost *host;
+
+	host = g_hash_table_lookup (priv->hosts, uri);
+	if (host)
+		return host;
+
+	host = soup_session_host_new (session, uri);
+	g_hash_table_insert (priv->hosts, host->uri, host);
 
 	return host;
 }
@@ -816,18 +1066,7 @@ soup_session_host_new (SoupSession *session, SoupURI *uri)
 static SoupSessionHost *
 get_host_for_message (SoupSession *session, SoupMessage *msg)
 {
-	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
-	SoupSessionHost *host;
-	SoupURI *uri = soup_message_get_uri (msg);
-
-	host = g_hash_table_lookup (priv->hosts, uri);
-	if (host)
-		return host;
-
-	host = soup_session_host_new (session, uri);
-	g_hash_table_insert (priv->hosts, host->uri, host);
-
-	return host;
+	return get_host_for_uri (session, soup_message_get_uri (msg));
 }
 
 static void
@@ -869,13 +1108,20 @@ auth_manager_authenticate (SoupAuthManager *manager, SoupMessage *msg,
 static void
 redirect_handler (SoupMessage *msg, gpointer user_data)
 {
-	SoupSession *session = user_data;
+	SoupMessageQueueItem *item = user_data;
+	SoupSession *session = item->session;
 	const char *new_loc;
 	SoupURI *new_uri;
 
 	new_loc = soup_message_headers_get_one (msg->response_headers,
 						"Location");
 	g_return_if_fail (new_loc != NULL);
+
+	if (item->redirection_count >= SOUP_SESSION_MAX_REDIRECTION_COUNT) {
+		soup_session_cancel_message (session, msg, SOUP_STATUS_TOO_MANY_REDIRECTS);
+		return;
+	}
+	item->redirection_count++;
 
 	if (msg->status_code == SOUP_STATUS_SEE_OTHER ||
 	    (msg->status_code == SOUP_STATUS_FOUND &&
@@ -924,6 +1170,8 @@ redirect_handler (SoupMessage *msg, gpointer user_data)
 	 */
 	new_uri = soup_uri_new_with_base (soup_message_get_uri (msg), new_loc);
 	if (!new_uri || !new_uri->host) {
+		if (new_uri)
+			soup_uri_free (new_uri);
 		soup_message_set_status_full (msg,
 					      SOUP_STATUS_MALFORMED,
 					      "Invalid Redirect URL");
@@ -939,26 +1187,50 @@ redirect_handler (SoupMessage *msg, gpointer user_data)
 void
 soup_session_send_queue_item (SoupSession *session,
 			      SoupMessageQueueItem *item,
-			      SoupConnection *conn)
+			      SoupMessageCompletionFn completion_cb)
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
-
-	if (item->conn) {
-		if (item->conn != conn) {
-			g_object_unref (item->conn);
-			item->conn = g_object_ref (conn);
-		}
-	} else
-		item->conn = g_object_ref (conn);
+	SoupHTTPVersion http_version;
+	SoupSessionHost *host;
 
 	if (priv->user_agent) {
 		soup_message_headers_replace (item->msg->request_headers,
 					      "User-Agent", priv->user_agent);
 	}
 
+	if (priv->accept_language &&
+	    !soup_message_headers_get_list (item->msg->request_headers,
+					    "Accept-Language")) {
+		soup_message_headers_append (item->msg->request_headers,
+					     "Accept-Language",
+					     priv->accept_language);
+	}
+
+	g_mutex_lock (priv->host_lock);
+	host = get_host_for_message (session, item->msg);
+	http_version = host->http_version;
+	g_mutex_unlock (priv->host_lock);
+
+	/* Force keep alive connections for HTTP 1.0. Performance will
+	 * improve when issuing multiple requests to the same host in
+	 * a short period of time, as we wouldn't need to establish
+	 * new connections. Keep alive is implicit for HTTP 1.1.
+	 */
+	if (http_version == SOUP_HTTP_1_0) {
+		const gchar* conn_header;
+
+		conn_header = soup_message_headers_get_list (item->msg->request_headers, "Connection");
+		if (!conn_header ||
+		    (!soup_header_contains (conn_header, "Keep-Alive") &&
+		     !soup_header_contains (conn_header, "close")))
+
+			soup_message_headers_append (item->msg->request_headers,
+						     "Connection", "Keep-Alive");
+	}
+
 	g_signal_emit (session, signals[REQUEST_STARTED], 0,
-		       item->msg, soup_connection_get_socket (conn));
-	soup_connection_send_request (conn, item->msg);
+		       item->msg, soup_connection_get_socket (item->conn));
+	soup_connection_send_request (item->conn, item, completion_cb, item);
 }
 
 gboolean
@@ -1017,61 +1289,12 @@ connection_disconnected (SoupConnection *conn, gpointer user_data)
 	g_object_unref (conn);
 }
 
-void
-soup_session_connection_failed (SoupSession *session,
-				SoupConnection *conn, guint status)
-{
-	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
-	SoupSessionHost *host;
-	SoupMessageQueueItem *item;
-	SoupMessage *msg;
-
-	g_mutex_lock (priv->host_lock);
-	host = g_hash_table_lookup (priv->conns, conn);
-	g_mutex_unlock (priv->host_lock);
-	if (!host)
-		return;
-
-	connection_disconnected (conn, session);
-
-	/* Cancel any other messages waiting for a connection to it,
-	 * since they're out of luck.
-	 */
-	g_object_ref (session);
-	for (item = soup_message_queue_first (priv->queue); item; item = soup_message_queue_next (priv->queue, item)) {
-		msg = item->msg;
-		if (SOUP_MESSAGE_IS_STARTING (msg) &&
-		    get_host_for_message (session, msg) == host)
-			soup_session_cancel_message (session, msg, status);
-	}
-	g_object_unref (session);
-}
-
-static void
-tunnel_connected (SoupMessage *msg, gpointer user_data)
-{
-	SoupSession *session = user_data;
-
-	if (SOUP_STATUS_IS_SUCCESSFUL (msg->status_code)) {
-		SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
-		SoupMessageQueueItem *item =
-			soup_message_queue_lookup (priv->queue, msg);
-
-		/* Clear the connection's proxy_uri, since it is now
-		 * (effectively) directly connected.
-		 */
-		g_object_set (item->conn,
-			      SOUP_CONNECTION_PROXY_URI, NULL,
-			      NULL);
-		soup_message_queue_item_unref (item);
-	}
-}
-
 SoupMessageQueueItem *
-soup_session_make_connect_message (SoupSession *session,
-				   SoupAddress *server_addr)
+soup_session_make_connect_message (SoupSession    *session,
+				   SoupConnection *conn)
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+	SoupAddress *server_addr = soup_connection_get_tunnel_addr (conn);
 	SoupURI *uri;
 	SoupMessage *msg;
 	SoupMessageQueueItem *item;
@@ -1087,54 +1310,18 @@ soup_session_make_connect_message (SoupSession *session,
 
 	/* Call the base implementation of soup_session_queue_message
 	 * directly, to add msg to the SoupMessageQueue and cause all
-	 * the right signals to be emitted. We can't use
-	 * queue_message's callback arg in this case because that's
-	 * actually implemented by the subclasses.
+	 * the right signals to be emitted.
 	 */
-	g_signal_connect (msg, "finished",
-			  G_CALLBACK (tunnel_connected), session);
 	queue_message (session, msg, NULL, NULL);
 	item = soup_message_queue_lookup (priv->queue, msg);
+	item->conn = g_object_ref (conn);
 	g_object_unref (msg);
+
+	g_signal_emit (session, signals[TUNNELING], 0, conn);
 	return item;
 }
 
-/**
- * soup_session_get_connection:
- * @session: a #SoupSession
- * @item: a #SoupMessageQueueItem
- * @try_pruning: on return, whether or not to try pruning a connection
- * 
- * Tries to find or create a connection for @item; this is an internal
- * method for #SoupSession subclasses.
- *
- * If there is an idle connection to the relevant host available, then
- * that connection will be returned. The connection will be set to
- * %SOUP_CONNECTION_IN_USE, so the caller must call
- * soup_connection_set_state() to set it to %SOUP_CONNECTION_IDLE if
- * it ends up not using the connection right away.
- *
- * If there is no idle connection available, but it is possible to
- * create a new connection, then one will be created and returned
- * (with state %SOUP_CONNECTION_NEW). The caller MUST then call
- * soup_connection_connect_sync() or soup_connection_connect_async()
- * to connect it. If the connection attempt fails, the caller must
- * call soup_session_connection_failed() to tell the session to free
- * the connection.
- *
- * If no connection is available and a new connection cannot be made,
- * soup_session_get_connection() will return %NULL. If @session has
- * the maximum number of open connections open, but does not have the
- * maximum number of per-host connections open to the relevant host,
- * then *@try_pruning will be set to %TRUE. In this case, the caller
- * can call soup_session_try_prune_connection() to close an idle
- * connection, and then try soup_session_get_connection() again. (If
- * calling soup_session_try_prune_connection() wouldn't help, then
- * *@try_pruning is left untouched; it is NOT set to %FALSE.)
- *
- * Return value: a #SoupConnection, or %NULL
- **/
-SoupConnection *
+gboolean
 soup_session_get_connection (SoupSession *session,
 			     SoupMessageQueueItem *item,
 			     gboolean *try_pruning)
@@ -1148,6 +1335,11 @@ soup_session_get_connection (SoupSession *session,
 	int num_pending = 0;
 	SoupURI *uri;
 
+	if (item->conn) {
+		g_return_val_if_fail (soup_connection_get_state (item->conn) != SOUP_CONNECTION_DISCONNECTED, FALSE);
+		return TRUE;
+	}
+
 	g_mutex_lock (priv->host_lock);
 
 	host = get_host_for_message (session, item->msg);
@@ -1155,7 +1347,8 @@ soup_session_get_connection (SoupSession *session,
 		if (soup_connection_get_state (conns->data) == SOUP_CONNECTION_IDLE) {
 			soup_connection_set_state (conns->data, SOUP_CONNECTION_IN_USE);
 			g_mutex_unlock (priv->host_lock);
-			return conns->data;
+			item->conn = g_object_ref (conns->data);
+			return TRUE;
 		} else if (soup_connection_get_state (conns->data) == SOUP_CONNECTION_CONNECTING)
 			num_pending++;
 	}
@@ -1165,18 +1358,18 @@ soup_session_get_connection (SoupSession *session,
 	 */
 	if (num_pending > host->num_messages / 2) {
 		g_mutex_unlock (priv->host_lock);
-		return NULL;
+		return FALSE;
 	}
 
 	if (host->num_conns >= priv->max_conns_per_host) {
 		g_mutex_unlock (priv->host_lock);
-		return NULL;
+		return FALSE;
 	}
 
 	if (priv->num_conns >= priv->max_conns) {
 		*try_pruning = TRUE;
 		g_mutex_unlock (priv->host_lock);
-		return NULL;
+		return FALSE;
 	}
 
 	if (item->proxy_addr) {
@@ -1203,6 +1396,7 @@ soup_session_get_connection (SoupSession *session,
 		SOUP_CONNECTION_TUNNEL_ADDRESS, tunnel_addr,
 		SOUP_CONNECTION_PROXY_URI, item->proxy_uri,
 		SOUP_CONNECTION_SSL_CREDENTIALS, ssl_creds,
+		SOUP_CONNECTION_SSL_STRICT, priv->ssl_strict,
 		SOUP_CONNECTION_ASYNC_CONTEXT, priv->async_context,
 		SOUP_CONNECTION_TIMEOUT, priv->io_timeout,
 		SOUP_CONNECTION_IDLE_TIMEOUT, priv->idle_timeout,
@@ -1211,6 +1405,8 @@ soup_session_get_connection (SoupSession *session,
 			  G_CALLBACK (connection_disconnected),
 			  session);
 
+	g_signal_emit (session, signals[CONNECTION_CREATED], 0, conn);
+
 	g_hash_table_insert (priv->conns, conn, host);
 
 	priv->num_conns++;
@@ -1218,7 +1414,8 @@ soup_session_get_connection (SoupSession *session,
 	host->connections = g_slist_prepend (host->connections, conn);
 
 	g_mutex_unlock (priv->host_lock);
-	return conn;
+	item->conn = g_object_ref (conn);
+	return TRUE;
 }
 
 SoupMessageQueue *
@@ -1229,11 +1426,10 @@ soup_session_get_queue (SoupSession *session)
 	return priv->queue;
 }
 
-static void
-message_finished (SoupMessage *msg, gpointer user_data)
+void
+soup_session_unqueue_item (SoupSession          *session,
+			   SoupMessageQueueItem *item)
 {
-	SoupMessageQueueItem *item = user_data;
-	SoupSession *session = item->session;
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupSessionHost *host;
 
@@ -1242,24 +1438,86 @@ message_finished (SoupMessage *msg, gpointer user_data)
 		item->conn = NULL;
 	}
 
-	if (!SOUP_MESSAGE_IS_STARTING (msg)) {
-		soup_message_queue_remove (priv->queue, item);
-
-		g_mutex_lock (priv->host_lock);
-		host = get_host_for_message (session, item->msg);
-		host->num_messages--;
-		g_mutex_unlock (priv->host_lock);
-
-		g_signal_handlers_disconnect_by_func (msg, message_finished, item);
-		/* g_signal_handlers_disconnect_by_func doesn't work if you
-		 * have a metamarshal, meaning it doesn't work with
-		 * soup_message_add_header_handler()
-		 */
-		g_signal_handlers_disconnect_matched (msg, G_SIGNAL_MATCH_DATA,
-						      0, 0, NULL, NULL, session);
-		g_signal_emit (session, signals[REQUEST_UNQUEUED], 0, msg);
-		soup_message_queue_item_unref (item);
+	if (item->state != SOUP_MESSAGE_FINISHED) {
+		g_warning ("finished an item with state %d", item->state);
+		return;
 	}
+
+	soup_message_queue_remove (priv->queue, item);
+
+	g_mutex_lock (priv->host_lock);
+	host = get_host_for_message (session, item->msg);
+	host->num_messages--;
+	g_mutex_unlock (priv->host_lock);
+
+	/* g_signal_handlers_disconnect_by_func doesn't work if you
+	 * have a metamarshal, meaning it doesn't work with
+	 * soup_message_add_header_handler()
+	 */
+	g_signal_handlers_disconnect_matched (item->msg, G_SIGNAL_MATCH_DATA,
+					      0, 0, NULL, NULL, item);
+	g_signal_emit (session, signals[REQUEST_UNQUEUED], 0, item->msg);
+	soup_message_queue_item_unref (item);
+}
+
+void
+soup_session_set_item_status (SoupSession          *session,
+			      SoupMessageQueueItem *item,
+			      guint                 status_code)
+{
+	SoupURI *uri;
+	char *msg;
+
+	switch (status_code) {
+	case SOUP_STATUS_CANT_RESOLVE:
+	case SOUP_STATUS_CANT_CONNECT:
+		uri = soup_message_get_uri (item->msg);
+		msg = g_strdup_printf ("%s (%s)",
+				       soup_status_get_phrase (status_code),
+				       uri->host);
+		soup_message_set_status_full (item->msg, status_code, msg);
+		g_free (msg);
+		break;
+
+	case SOUP_STATUS_CANT_RESOLVE_PROXY:
+	case SOUP_STATUS_CANT_CONNECT_PROXY:
+		if (item->proxy_uri && item->proxy_uri->host) {
+			msg = g_strdup_printf ("%s (%s)",
+					       soup_status_get_phrase (status_code),
+					       item->proxy_uri->host);
+			soup_message_set_status_full (item->msg, status_code, msg);
+			g_free (msg);
+			break;
+		}
+		soup_message_set_status (item->msg, status_code);
+		break;
+
+	case SOUP_STATUS_SSL_FAILED:
+		if (!g_tls_backend_supports_tls (g_tls_backend_get_default ())) {
+			soup_message_set_status_full (item->msg, status_code,
+						      "TLS/SSL support not available; install glib-networking");
+		} else
+			soup_message_set_status (item->msg, status_code);
+		break;
+
+	default:
+		soup_message_set_status (item->msg, status_code);
+		break;
+	}
+}
+
+static void
+got_headers_cb (SoupMessage *msg, gpointer data)
+{
+	SoupMessageQueueItem *item = data;
+	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (item->session);
+	SoupSessionHost *host;
+
+	/* Update the HTTP version to use for messages to this host */
+	g_mutex_lock (priv->host_lock);
+	host = get_host_for_message (item->session, SOUP_MESSAGE (msg));
+	host->http_version = soup_message_get_http_version (msg);
+	g_mutex_unlock (priv->host_lock);
 }
 
 static void
@@ -1277,16 +1535,14 @@ queue_message (SoupSession *session, SoupMessage *msg,
 	host->num_messages++;
 	g_mutex_unlock (priv->host_lock);
 
-	soup_message_set_io_status (msg, SOUP_MESSAGE_IO_STATUS_QUEUED);
-
-	g_signal_connect_after (msg, "finished",
-				G_CALLBACK (message_finished), item);
-
 	if (!(soup_message_get_flags (msg) & SOUP_MESSAGE_NO_REDIRECT)) {
 		soup_message_add_header_handler (
 			msg, "got_body", "Location",
-			G_CALLBACK (redirect_handler), session);
+			G_CALLBACK (redirect_handler), item);
 	}
+
+	/* Used to keep track of the HTTP version used by the host */
+	g_signal_connect (msg, "got-headers", G_CALLBACK (got_headers_cb), item);
 
 	g_signal_emit (session, signals[REQUEST_QUEUED], 0, msg);
 }
@@ -1304,10 +1560,10 @@ queue_message (SoupSession *session, SoupMessage *msg,
 /**
  * soup_session_queue_message:
  * @session: a #SoupSession
- * @msg: the message to queue
- * @callback: a #SoupSessionCallback which will be called after the
- * message completes or when an unrecoverable error occurs.
- * @user_data: a pointer passed to @callback.
+ * @msg: (transfer full): the message to queue
+ * @callback: (allow-none) (scope async): a #SoupSessionCallback which will
+ * be called after the message completes or when an unrecoverable error occurs.
+ * @user_data: (allow-none): a pointer passed to @callback.
  * 
  * Queues the message @msg for sending. All messages are processed
  * while the glib main loop runs. If @msg has been processed before,
@@ -1332,7 +1588,13 @@ soup_session_queue_message (SoupSession *session, SoupMessage *msg,
 static void
 requeue_message (SoupSession *session, SoupMessage *msg)
 {
-	soup_message_set_io_status (msg, SOUP_MESSAGE_IO_STATUS_QUEUED);
+	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+	SoupMessageQueueItem *item;
+
+	item = soup_message_queue_lookup (priv->queue, msg);
+	g_return_if_fail (item != NULL);
+	item->state = SOUP_MESSAGE_RESTARTING;
+	soup_message_queue_item_unref (item);
 }
 
 /**
@@ -1424,15 +1686,12 @@ cancel_message (SoupSession *session, SoupMessage *msg, guint status_code)
 	SoupMessageQueueItem *item;
 
 	item = soup_message_queue_lookup (priv->queue, msg);
-	if (item) {
-		if (item->cancellable)
-			g_cancellable_cancel (item->cancellable);
-		soup_message_queue_item_unref (item);
-	}
+	g_return_if_fail (item != NULL);
 
-	soup_message_io_stop (msg);
 	soup_message_set_status (msg, status_code);
-	soup_message_finished (msg);
+	g_cancellable_cancel (item->cancellable);
+
+	soup_message_queue_item_unref (item);
 }
 
 /**
@@ -1465,14 +1724,24 @@ void
 soup_session_cancel_message (SoupSession *session, SoupMessage *msg,
 			     guint status_code)
 {
+	SoupSessionPrivate *priv;
+	SoupMessageQueueItem *item;
+
 	g_return_if_fail (SOUP_IS_SESSION (session));
 	g_return_if_fail (SOUP_IS_MESSAGE (msg));
 
+	priv = SOUP_SESSION_GET_PRIVATE (session);
+	item = soup_message_queue_lookup (priv->queue, msg);
 	/* If the message is already ending, don't do anything */
-	if (soup_message_get_io_status (msg) == SOUP_MESSAGE_IO_STATUS_FINISHED)
+	if (!item)
 		return;
+	if (item->state == SOUP_MESSAGE_FINISHED) {
+		soup_message_queue_item_unref (item);
+		return;
+	}
 
 	SOUP_SESSION_GET_CLASS (session)->cancel_message (session, msg, status_code);
+	soup_message_queue_item_unref (item);
 }
 
 static void
@@ -1482,6 +1751,20 @@ gather_conns (gpointer key, gpointer host, gpointer data)
 	GSList **conns = data;
 
 	*conns = g_slist_prepend (*conns, g_object_ref (conn));
+}
+
+static void
+flush_queue (SoupSession *session)
+{
+	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+	SoupMessageQueueItem *item;
+
+	for (item = soup_message_queue_first (priv->queue);
+	     item;
+	     item = soup_message_queue_next (priv->queue, item)) {
+		soup_session_cancel_message (session, item->msg,
+					     SOUP_STATUS_CANCELLED);
+	}
 }
 
 /**
@@ -1494,18 +1777,12 @@ void
 soup_session_abort (SoupSession *session)
 {
 	SoupSessionPrivate *priv;
-	SoupMessageQueueItem *item;
 	GSList *conns, *c;
 
 	g_return_if_fail (SOUP_IS_SESSION (session));
 	priv = SOUP_SESSION_GET_PRIVATE (session);
 
-	for (item = soup_message_queue_first (priv->queue);
-	     item;
-	     item = soup_message_queue_next (priv->queue, item)) {
-		soup_session_cancel_message (session, item->msg,
-					     SOUP_STATUS_CANCELLED);
-	}
+	SOUP_SESSION_GET_CLASS (session)->flush_queue (session);
 
 	/* Close all connections */
 	g_mutex_lock (priv->host_lock);
@@ -1519,6 +1796,46 @@ soup_session_abort (SoupSession *session)
 	}
 
 	g_slist_free (conns);
+}
+
+/**
+* soup_session_prepare_for_uri:
+* @session: a #SoupSession
+* @uri: a #SoupURI which may be required
+*
+* Tells @session that @uri may be requested shortly, and so the
+* session can try to prepare (resolving the domain name, obtaining
+* proxy address, etc.) in order to work more quickly once the URI is
+* actually requested.
+*
+* This method acts asynchronously, in @session's %async_context.
+* If you are using #SoupSessionSync and do not have a main loop running,
+* then you can't use this method.
+*
+* Since: 2.30
+**/
+void
+soup_session_prepare_for_uri (SoupSession *session, SoupURI *uri)
+{
+	SoupSessionPrivate *priv;
+	SoupSessionHost *host;
+	SoupAddress *addr;
+
+	g_return_if_fail (SOUP_IS_SESSION (session));
+	g_return_if_fail (uri != NULL);
+
+	if (!uri->host)
+		return;
+
+	priv = SOUP_SESSION_GET_PRIVATE (session);
+
+	g_mutex_lock (priv->host_lock);
+	host = get_host_for_uri (session, uri);
+	addr = g_object_ref (host->addr);
+	g_mutex_unlock (priv->host_lock);
+
+	soup_address_resolve_async (addr, priv->async_context,
+				    NULL, NULL, NULL);
 }
 
 /**
@@ -1549,12 +1866,19 @@ soup_session_add_feature (SoupSession *session, SoupSessionFeature *feature)
 /**
  * soup_session_add_feature_by_type:
  * @session: a #SoupSession
- * @feature_type: the #GType of a class that implements #SoupSessionFeature
+ * @feature_type: a #GType
  *
- * Creates a new feature of type @feature_type and adds it to
- * @session. You can use this instead of soup_session_add_feature() in
- * the case wher you don't need to customize the new feature in any
- * way. You can also add a feature to the session at construct time by
+ * If @feature_type is the type of a class that implements
+ * #SoupSessionFeature, this creates a new feature of that type and
+ * adds it to @session as with soup_session_add_feature(). You can use
+ * this when you don't need to customize the new feature in any way.
+ *
+ * If @feature_type is not a #SoupSessionFeature type, this gives
+ * each existing feature on @session the chance to accept @feature_type
+ * as a "subfeature". This can be used to add new #SoupAuth types,
+ * for instance.
+ *
+ * You can also add a feature to the session at construct time by
  * using the %SOUP_SESSION_ADD_FEATURE_BY_TYPE property.
  *
  * Since: 2.24
@@ -1562,14 +1886,24 @@ soup_session_add_feature (SoupSession *session, SoupSessionFeature *feature)
 void
 soup_session_add_feature_by_type (SoupSession *session, GType feature_type)
 {
-	SoupSessionFeature *feature;
-
 	g_return_if_fail (SOUP_IS_SESSION (session));
-	g_return_if_fail (g_type_is_a (feature_type, SOUP_TYPE_SESSION_FEATURE));
 
-	feature = g_object_new (feature_type, NULL);
-	soup_session_add_feature (session, feature);
-	g_object_unref (feature);
+	if (g_type_is_a (feature_type, SOUP_TYPE_SESSION_FEATURE)) {
+		SoupSessionFeature *feature;
+
+		feature = g_object_new (feature_type, NULL);
+		soup_session_add_feature (session, feature);
+		g_object_unref (feature);
+	} else {
+		SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+		GSList *f;
+
+		for (f = priv->features; f; f = f->next) {
+			if (soup_session_feature_add_feature (f->data, feature_type))
+				return;
+		}
+		g_warning ("No feature manager for feature of type '%s'", g_type_name (feature_type));
+	}
 }
 
 /**
@@ -1600,7 +1934,7 @@ soup_session_remove_feature (SoupSession *session, SoupSessionFeature *feature)
 /**
  * soup_session_remove_feature_by_type:
  * @session: a #SoupSession
- * @feature_type: the #GType of a class that implements #SoupSessionFeature
+ * @feature_type: a #GType
  *
  * Removes all features of type @feature_type (or any subclass of
  * @feature_type) from @session. You can also remove standard features
@@ -1618,12 +1952,21 @@ soup_session_remove_feature_by_type (SoupSession *session, GType feature_type)
 	g_return_if_fail (SOUP_IS_SESSION (session));
 
 	priv = SOUP_SESSION_GET_PRIVATE (session);
-restart:
-	for (f = priv->features; f; f = f->next) {
-		if (G_TYPE_CHECK_INSTANCE_TYPE (f->data, feature_type)) {
-			soup_session_remove_feature (session, f->data);
-			goto restart;
+
+	if (g_type_is_a (feature_type, SOUP_TYPE_SESSION_FEATURE)) {
+	restart:
+		for (f = priv->features; f; f = f->next) {
+			if (G_TYPE_CHECK_INSTANCE_TYPE (f->data, feature_type)) {
+				soup_session_remove_feature (session, f->data);
+				goto restart;
+			}
 		}
+	} else {
+		for (f = priv->features; f; f = f->next) {
+			if (soup_session_feature_remove_feature (f->data, feature_type))
+				return;
+		}
+		g_warning ("No feature manager for feature of type '%s'", g_type_name (feature_type));
 	}
 }
 
@@ -1636,8 +1979,8 @@ restart:
  * you want to see all features, you can pass %G_TYPE_SESSION_FEATURE
  * for @feature_type.)
  *
- * Return value: a list of features. You must free the list, but not
- * its contents
+ * Return value: (transfer container): a list of features. You must
+ * free the list, but not its contents
  *
  * Since: 2.26
  **/
@@ -1666,8 +2009,8 @@ soup_session_get_features (SoupSession *session, GType feature_type)
  * features where there may be more than one feature of a given type,
  * use soup_session_get_features().
  *
- * Return value: a #SoupSessionFeature, or %NULL. The feature is owned
- * by @session.
+ * Return value: (transfer none): a #SoupSessionFeature, or %NULL. The
+ * feature is owned by @session.
  *
  * Since: 2.26
  **/
@@ -1713,8 +2056,8 @@ soup_session_get_feature (SoupSession *session, GType feature_type)
  * disabled on @msg, and the second is not, then this will return
  * %NULL, not the second feature.
  *
- * Return value: a #SoupSessionFeature, or %NULL. The feature is owned
- * by @session.
+ * Return value: (transfer none): a #SoupSessionFeature, or %NULL. The
+ * feature is owned by @session.
  *
  * Since: 2.28
  **/

@@ -119,13 +119,18 @@ enum {
 	PROP_SERVER_SIDE,
 	PROP_STATUS_CODE,
 	PROP_REASON_PHRASE,
+	PROP_FIRST_PARTY,
+	PROP_REQUEST_BODY,
+	PROP_REQUEST_HEADERS,
+	PROP_RESPONSE_BODY,
+	PROP_RESPONSE_HEADERS,
+	PROP_TLS_CERTIFICATE,
+	PROP_TLS_ERRORS,
 
 	LAST_PROP
 };
 
 static void got_body (SoupMessage *req);
-static void restarted (SoupMessage *req);
-static void finished (SoupMessage *req);
 
 static void set_property (GObject *object, guint prop_id,
 			  const GValue *value, GParamSpec *pspec);
@@ -137,7 +142,6 @@ soup_message_init (SoupMessage *msg)
 {
 	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
 
-	priv->io_status = SOUP_MESSAGE_IO_STATUS_IDLE;
 	priv->http_version = priv->orig_http_version = SOUP_HTTP_1_1;
 
 	msg->request_body = soup_message_body_new ();
@@ -158,6 +162,8 @@ finalize (GObject *object)
 
 	if (priv->uri)
 		soup_uri_free (priv->uri);
+	if (priv->first_party)
+		soup_uri_free (priv->first_party);
 	if (priv->addr)
 		g_object_unref (priv->addr);
 
@@ -172,6 +178,9 @@ finalize (GObject *object)
 		g_object_unref (priv->decoders->data);
 		priv->decoders = g_slist_delete_link (priv->decoders, priv->decoders);
 	}
+
+	if (priv->tls_certificate)
+		g_object_unref (priv->tls_certificate);
 
 	soup_message_body_free (msg->request_body);
 	soup_message_headers_free (msg->request_headers);
@@ -191,9 +200,7 @@ soup_message_class_init (SoupMessageClass *message_class)
 	g_type_class_add_private (message_class, sizeof (SoupMessagePrivate));
 
 	/* virtual method definition */
-	message_class->got_body     = got_body;
-	message_class->restarted    = restarted;
-	message_class->finished     = finished;
+	message_class->got_body = got_body;
 
 	/* virtual method override */
 	object_class->finalize = finalize;
@@ -413,7 +420,7 @@ soup_message_class_init (SoupMessageClass *message_class)
 	 * SoupMessage::content-sniffed:
 	 * @msg: the message
 	 * @type: the content type that we got from sniffing
-	 * @params: a #GHashTable with the parameters
+	 * @params: (element-type utf8 utf8): a #GHashTable with the parameters
 	 *
 	 * This signal is emitted after %got-headers, and before the
 	 * first %got-chunk. If content sniffing is disabled, or no
@@ -576,6 +583,98 @@ soup_message_class_init (SoupMessageClass *message_class)
 				     "The HTTP response reason phrase",
 				     NULL,
 				     G_PARAM_READWRITE));
+	/**
+	 * SOUP_MESSAGE_FIRST_PARTY:
+	 *
+	 * Alias for the #SoupMessage:first-party property. (The
+	 * #SoupURI loaded in the application when the message was
+	 * queued.)
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_FIRST_PARTY,
+		g_param_spec_boxed (SOUP_MESSAGE_FIRST_PARTY,
+				    "First party",
+				    "The URI loaded in the application when the message was requested.",
+				    SOUP_TYPE_URI,
+				    G_PARAM_READWRITE));
+	/**
+	 * SOUP_MESSAGE_REQUEST_BODY:
+	 *
+	 * Alias for the #SoupMessage:request-body property. (The
+	 * message's HTTP request body.)
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_REQUEST_BODY,
+		g_param_spec_boxed (SOUP_MESSAGE_REQUEST_BODY,
+				    "Request Body",
+				    "The HTTP request content",
+				    SOUP_TYPE_MESSAGE_BODY,
+				    G_PARAM_READABLE));
+	/**
+	 * SOUP_MESSAGE_REQUEST_HEADERS:
+	 *
+	 * Alias for the #SoupMessage:request-headers property. (The
+	 * message's HTTP request headers.)
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_REQUEST_HEADERS,
+		g_param_spec_boxed (SOUP_MESSAGE_REQUEST_HEADERS,
+				    "Request Headers",
+				    "The HTTP request headers",
+				    SOUP_TYPE_MESSAGE_HEADERS,
+				    G_PARAM_READABLE));
+	/**
+	 * SOUP_MESSAGE_RESPONSE_BODY:
+	 *
+	 * Alias for the #SoupMessage:response-body property. (The
+	 * message's HTTP response body.)
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_RESPONSE_BODY,
+		g_param_spec_boxed (SOUP_MESSAGE_RESPONSE_BODY,
+				    "Response Body",
+				    "The HTTP response content",
+				    SOUP_TYPE_MESSAGE_BODY,
+				    G_PARAM_READABLE));
+	/**
+	 * SOUP_MESSAGE_RESPONSE_HEADERS:
+	 *
+	 * Alias for the #SoupMessage:response-headers property. (The
+	 * message's HTTP response headers.)
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_RESPONSE_HEADERS,
+		g_param_spec_boxed (SOUP_MESSAGE_RESPONSE_HEADERS,
+				    "Response Headers",
+				     "The HTTP response headers",
+				    SOUP_TYPE_MESSAGE_HEADERS,
+				    G_PARAM_READABLE));
+	/**
+	 * SOUP_MESSAGE_TLS_CERTIFICATE:
+	 *
+	 * Alias for the #SoupMessage:tls-certificate property. (The
+	 * TLS certificate associated with the message, if any.)
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_TLS_CERTIFICATE,
+		g_param_spec_object (SOUP_MESSAGE_TLS_CERTIFICATE,
+				     "TLS Certificate",
+				     "The TLS certificate associated with the message",
+				     G_TYPE_TLS_CERTIFICATE,
+				     G_PARAM_READWRITE));
+	/**
+	 * SOUP_MESSAGE_TLS_ERRORS:
+	 *
+	 * Alias for the #SoupMessage:tls-errors property. (The
+	 * verification errors on #SoupMessage:tls-certificate.)
+	 **/
+	g_object_class_install_property (
+		object_class, PROP_TLS_ERRORS,
+		g_param_spec_flags (SOUP_MESSAGE_TLS_ERRORS,
+				    "TLS Errors",
+				    "The verification errors on the message's TLS certificate",
+				    G_TYPE_TLS_CERTIFICATE_FLAGS, 0,
+				    G_PARAM_READWRITE));
 }
 
 static void
@@ -612,6 +711,23 @@ set_property (GObject *object, guint prop_id,
 		soup_message_set_status_full (msg, msg->status_code,
 					      g_value_get_string (value));
 		break;
+	case PROP_FIRST_PARTY:
+		soup_message_set_first_party (msg, g_value_get_boxed (value));
+		break;
+	case PROP_TLS_CERTIFICATE:
+		if (priv->tls_certificate)
+			g_object_unref (priv->tls_certificate);
+		priv->tls_certificate = g_value_dup_object (value);
+		if (priv->tls_certificate && !priv->tls_errors)
+			priv->msg_flags |= SOUP_MESSAGE_CERTIFICATE_TRUSTED;
+		break;
+	case PROP_TLS_ERRORS:
+		priv->tls_errors = g_value_get_flags (value);
+		if (priv->tls_errors)
+			priv->msg_flags &= ~SOUP_MESSAGE_CERTIFICATE_TRUSTED;
+		else if (priv->tls_certificate)
+			priv->msg_flags |= SOUP_MESSAGE_CERTIFICATE_TRUSTED;
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -646,6 +762,27 @@ get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_REASON_PHRASE:
 		g_value_set_string (value, msg->reason_phrase);
+		break;
+	case PROP_FIRST_PARTY:
+		g_value_set_boxed (value, priv->first_party);
+		break;
+	case PROP_REQUEST_BODY:
+		g_value_set_boxed (value, msg->request_body);
+		break;
+	case PROP_REQUEST_HEADERS:
+		g_value_set_boxed (value, msg->request_headers);
+		break;
+	case PROP_RESPONSE_BODY:
+		g_value_set_boxed (value, msg->response_body);
+		break;
+	case PROP_RESPONSE_HEADERS:
+		g_value_set_boxed (value, msg->response_headers);
+		break;
+	case PROP_TLS_CERTIFICATE:
+		g_value_set_object (value, priv->tls_certificate);
+		break;
+	case PROP_TLS_ERRORS:
+		g_value_set_flags (value, priv->tls_errors);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -740,9 +877,10 @@ soup_message_set_request (SoupMessage    *msg,
 /**
  * soup_message_set_response:
  * @msg: the message
- * @content_type: MIME Content-Type of the body
+ * @content_type: (allow-none): MIME Content-Type of the body
  * @resp_use: a #SoupMemoryUse describing how to handle @resp_body
- * @resp_body: a data buffer containing the body of the message response.
+ * @resp_body: (array length=resp_length) (element-type guint8): a data buffer
+ * containing the body of the message response.
  * @resp_length: the byte length of @resp_body.
  * 
  * Convenience function to set the response body of a #SoupMessage. If
@@ -922,12 +1060,6 @@ soup_message_content_sniffed (SoupMessage *msg, const char *content_type, GHashT
 	g_signal_emit (msg, signals[CONTENT_SNIFFED], 0, content_type, params);
 }
 
-static void
-restarted (SoupMessage *req)
-{
-	soup_message_io_stop (req);
-}
-
 /**
  * soup_message_restarted:
  * @msg: a #SoupMessage
@@ -941,15 +1073,6 @@ soup_message_restarted (SoupMessage *msg)
 	g_signal_emit (msg, signals[RESTARTED], 0);
 }
 
-static void
-finished (SoupMessage *req)
-{
-	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (req);
-
-	soup_message_io_stop (req);
-	priv->io_status = SOUP_MESSAGE_IO_STATUS_FINISHED;
-}
-
 /**
  * soup_message_finished:
  * @msg: a #SoupMessage
@@ -960,10 +1083,7 @@ finished (SoupMessage *req)
 void
 soup_message_finished (SoupMessage *msg)
 {
-	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
-
-	if (priv->io_status != SOUP_MESSAGE_IO_STATUS_FINISHED)
-		g_signal_emit (msg, signals[FINISHED], 0);
+	g_signal_emit (msg, signals[FINISHED], 0);
 }
 
 static void
@@ -982,8 +1102,10 @@ header_handler_metamarshal (GClosure *closure, GValue *return_value,
 	const char *header_name = marshal_data;
 	SoupMessageHeaders *hdrs;
 
+#ifdef FIXME
 	if (priv->io_status != SOUP_MESSAGE_IO_STATUS_RUNNING)
 		return;
+#endif
 
 	hdrs = priv->server_side ? msg->request_headers : msg->response_headers;
 	if (soup_message_headers_get_one (hdrs, header_name)) {
@@ -1022,7 +1144,6 @@ soup_message_add_header_handler (SoupMessage *msg,
 				 GCallback    callback,
 				 gpointer     user_data)
 {
-	SoupMessagePrivate *priv;
 	GClosure *closure;
 	char *header_name;
 
@@ -1030,8 +1151,6 @@ soup_message_add_header_handler (SoupMessage *msg,
 	g_return_val_if_fail (signal != NULL, 0);
 	g_return_val_if_fail (header != NULL, 0);
 	g_return_val_if_fail (callback != NULL, 0);
-
-	priv = SOUP_MESSAGE_GET_PRIVATE (msg);
 
 	closure = g_cclosure_new (callback, user_data, NULL);
 
@@ -1050,11 +1169,12 @@ status_handler_metamarshal (GClosure *closure, GValue *return_value,
 			    gpointer invocation_hint, gpointer marshal_data)
 {
 	SoupMessage *msg = g_value_get_object (&param_values[0]);
-	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
 	guint status = GPOINTER_TO_UINT (marshal_data);
 
+#ifdef FIXME
 	if (priv->io_status != SOUP_MESSAGE_IO_STATUS_RUNNING)
 		return;
+#endif
 
 	if (msg->status_code == status) {
 		closure->marshal (closure, return_value, n_param_values,
@@ -1147,8 +1267,8 @@ soup_message_set_auth (SoupMessage *msg, SoupAuth *auth)
  *
  * Gets the #SoupAuth used by @msg for authentication.
  *
- * Return value: the #SoupAuth used by @msg for authentication, or
- * %NULL if @msg is unauthenticated.
+ * Return value: (transfer none): the #SoupAuth used by @msg for
+ * authentication, or %NULL if @msg is unauthenticated.
  **/
 SoupAuth *
 soup_message_get_auth (SoupMessage *msg)
@@ -1237,6 +1357,7 @@ soup_message_cleanup_response (SoupMessage *req)
 		priv->decoders = g_slist_delete_link (priv->decoders, priv->decoders);
 	}
 	priv->msg_flags &= ~SOUP_MESSAGE_CONTENT_DECODED;
+	priv->msg_flags &= ~SOUP_MESSAGE_CERTIFICATE_TRUSTED;
 
 	req->status_code = SOUP_STATUS_NONE;
 	if (req->reason_phrase) {
@@ -1245,10 +1366,18 @@ soup_message_cleanup_response (SoupMessage *req)
 	}
 	priv->http_version = priv->orig_http_version;
 
+	if (priv->tls_certificate) {
+		g_object_unref (priv->tls_certificate);
+		priv->tls_certificate = NULL;
+	}
+	priv->tls_errors = 0;
+
 	g_object_notify (G_OBJECT (req), SOUP_MESSAGE_STATUS_CODE);
 	g_object_notify (G_OBJECT (req), SOUP_MESSAGE_REASON_PHRASE);
 	g_object_notify (G_OBJECT (req), SOUP_MESSAGE_HTTP_VERSION);
 	g_object_notify (G_OBJECT (req), SOUP_MESSAGE_FLAGS);
+	g_object_notify (G_OBJECT (req), SOUP_MESSAGE_TLS_CERTIFICATE);
+	g_object_notify (G_OBJECT (req), SOUP_MESSAGE_TLS_ERRORS);
 }
 
 /**
@@ -1258,6 +1387,13 @@ soup_message_cleanup_response (SoupMessage *req)
  * @SOUP_MESSAGE_OVERWRITE_CHUNKS: Deprecated: equivalent to calling
  * soup_message_body_set_accumulate() on the incoming message body
  * (ie, %response_body for a client-side request), passing %FALSE.
+ * @SOUP_MESSAGE_CONTENT_DECODED: Set by #SoupContentDecoder to
+ * indicate that it has removed the Content-Encoding on a message (and
+ * so headers such as Content-Length may no longer accurately describe
+ * the body).
+ * @SOUP_MESSAGE_CERTIFICATE_TRUSTED: if %TRUE after an https response
+ * has been received, indicates that the server's SSL certificate is
+ * trusted according to the session's CA.
  *
  * Various flags that can be set on a #SoupMessage to alter its
  * behavior.
@@ -1436,7 +1572,7 @@ soup_message_set_uri (SoupMessage *msg, SoupURI *uri)
  *
  * Gets @msg's URI
  *
- * Return value: the URI @msg is targeted for.
+ * Return value: (transfer none): the URI @msg is targeted for.
  **/
 SoupURI *
 soup_message_get_uri (SoupMessage *msg)
@@ -1454,7 +1590,7 @@ soup_message_get_uri (SoupMessage *msg)
  * URI on a message, this will be unresolved, although the message's
  * session will resolve it before sending the message.
  *
- * Return value: the address @msg's URI points to
+ * Return value: (transfer none): the address @msg's URI points to
  *
  * Since: 2.26
  **/
@@ -1518,23 +1654,6 @@ soup_message_set_status_full (SoupMessage *msg,
 	msg->reason_phrase = g_strdup (reason_phrase);
 	g_object_notify (G_OBJECT (msg), SOUP_MESSAGE_STATUS_CODE);
 	g_object_notify (G_OBJECT (msg), SOUP_MESSAGE_REASON_PHRASE);
-}
-
-void
-soup_message_set_io_status (SoupMessage          *msg,
-			    SoupMessageIOStatus   status)
-{
-	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
-
-	priv->io_status = status;
-}
-
-SoupMessageIOStatus
-soup_message_get_io_status (SoupMessage *msg)
-{
-	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
-
-	return priv->io_status;
 }
 
 /**
@@ -1663,4 +1782,88 @@ soup_message_disables_feature (SoupMessage *msg, gpointer feature)
 			return TRUE;
 	}
 	return FALSE;
+}
+
+/**
+ * soup_message_get_first_party:
+ * @msg: a #SoupMessage
+ * 
+ * Returns: (transfer none): the @msg's first party #SoupURI
+ * 
+ * Since: 2.30
+ **/
+SoupURI*
+soup_message_get_first_party (SoupMessage *msg)
+{
+	SoupMessagePrivate *priv;
+
+	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), NULL);
+
+	priv = SOUP_MESSAGE_GET_PRIVATE (msg);
+	return priv->first_party;
+}
+
+/**
+ * soup_message_set_first_party:
+ * @msg: a #SoupMessage
+ * @first_party: the #SoupURI for the @msg's first party
+ * 
+ * Sets @first_party as the main document #SoupURI for @msg. For
+ * details of when and how this is used refer to the documentation for
+ * #SoupCookieJarAcceptPolicy.
+ *
+ * Since: 2.30
+ **/
+void
+soup_message_set_first_party (SoupMessage *msg,
+			      SoupURI     *first_party)
+{
+	SoupMessagePrivate *priv;
+
+	g_return_if_fail (SOUP_IS_MESSAGE (msg));
+	g_return_if_fail (first_party != NULL);
+
+	priv = SOUP_MESSAGE_GET_PRIVATE (msg);
+
+	if (priv->first_party) {
+		if (soup_uri_equal (priv->first_party, first_party))
+			return;
+
+		soup_uri_free (priv->first_party);
+	}
+
+	priv->first_party = soup_uri_copy (first_party);
+	g_object_notify (G_OBJECT (msg), SOUP_MESSAGE_FIRST_PARTY);
+}
+
+/**
+ * soup_message_get_https_status:
+ * @msg: a #SoupMessage
+ * @certificate: (out) (transfer none): @msg's TLS certificate
+ * @errors: (out): the verification status of @certificate
+ *
+ * If @msg is using https, this retrieves the #GTlsCertificate
+ * associated with its connection, and the #GTlsCertificateFlags showing
+ * what problems, if any, have been found with that certificate.
+ *
+ * Return value: %TRUE if @msg uses https, %FALSE if not
+ *
+ * Since: 2.34
+ */
+gboolean
+soup_message_get_https_status (SoupMessage           *msg,
+			       GTlsCertificate      **certificate,
+			       GTlsCertificateFlags  *errors)
+{
+	SoupMessagePrivate *priv;
+
+	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), FALSE);
+
+	priv = SOUP_MESSAGE_GET_PRIVATE (msg);
+
+	if (certificate)
+		*certificate = priv->tls_certificate;
+	if (errors)
+		*errors = priv->tls_errors;
+	return priv->tls_certificate != NULL;
 }

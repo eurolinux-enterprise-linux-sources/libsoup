@@ -371,10 +371,10 @@ soup_multipart_append_form_file (SoupMultipart *multipart,
 
 	headers = soup_message_headers_new (SOUP_MESSAGE_HEADERS_MULTIPART);
 	disposition = g_string_new ("form-data; ");
-	soup_header_g_string_append_param (disposition, "name", control_name);
+	soup_header_g_string_append_param_quoted (disposition, "name", control_name);
 	if (filename) {
 		g_string_append (disposition, "; ");
-		soup_header_g_string_append_param (disposition, "filename", filename);
+		soup_header_g_string_append_param_quoted (disposition, "filename", filename);
 	}
 	soup_message_headers_append (headers, "Content-Disposition",
 				     disposition->str);
@@ -383,20 +383,6 @@ soup_multipart_append_form_file (SoupMultipart *multipart,
 	if (content_type) {
 		soup_message_headers_append (headers, "Content-Type",
 					     content_type);
-	}
-
-	/* The HTML spec says we need to set Content-Transfer-Encoding
-	 * if the data is not 7bit. It probably doesn't actually
-	 * matter...
-	 */
-	if (content_type && strncmp (content_type, "text/", 5) != 0) {
-		soup_message_headers_append (headers,
-					     "Content-Transfer-Encoding",
-					     "binary");
-	} else {
-		soup_message_headers_append (headers,
-					     "Content-Transfer-Encoding",
-					     "8bit");
 	}
 
 	g_ptr_array_add (multipart->headers, headers);
@@ -423,21 +409,22 @@ soup_multipart_to_message (SoupMultipart *multipart,
 	SoupMessageHeadersIter iter;
 	const char *name, *value;
 	GString *str;
-	char *content_type;
+	GHashTable *params;
 	int i;
 
-	content_type = g_strdup_printf ("%s; boundary=\"%s\"",
-					multipart->mime_type,
-					multipart->boundary);
-	soup_message_headers_replace (dest_headers, "Content-Type",
-				      content_type);
-	g_free (content_type);
+	params = g_hash_table_new (g_str_hash, g_str_equal);
+	g_hash_table_insert (params, "boundary", multipart->boundary);
+	soup_message_headers_set_content_type (dest_headers,
+					       multipart->mime_type,
+					       params);
+	g_hash_table_destroy (params);
 
 	for (i = 0; i < multipart->bodies->len; i++) {
 		part_headers = multipart->headers->pdata[i];
 		part_body = multipart->bodies->pdata[i];
 
-		str = g_string_new ("\r\n--");
+		str = g_string_new (i == 0 ? NULL : "\r\n");
+		g_string_append (str, "--");
 		g_string_append (str, multipart->boundary);
 		g_string_append (str, "\r\n");
 		soup_message_headers_iter_init (&iter, part_headers);

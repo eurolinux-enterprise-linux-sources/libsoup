@@ -12,10 +12,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "soup-coding.h"
 #include "soup-connection.h"
 #include "soup-message.h"
 #include "soup-message-private.h"
+#include "soup-message-queue.h"
 #include "soup-misc.h"
 #include "soup-socket.h"
 #include "soup-ssl.h"
@@ -45,14 +45,16 @@ typedef enum {
 
 typedef struct {
 	SoupSocket           *sock;
-	SoupConnection       *conn;
+	SoupMessageQueueItem *item;
 	SoupMessageIOMode     mode;
+	GCancellable         *cancellable;
 
 	SoupMessageIOState    read_state;
 	SoupEncoding          read_encoding;
 	GByteArray           *read_meta_buf;
 	SoupMessageBody      *read_body;
 	goffset               read_length;
+	gboolean              read_eof_ok;
 
 	gboolean              need_content_sniffed, need_got_chunk;
 	SoupMessageBody      *sniff_data;
@@ -66,12 +68,14 @@ typedef struct {
 	goffset               write_length;
 	goffset               written;
 
-	guint read_tag, write_tag, err_tag;
+	guint read_tag, write_tag, tls_signal_id;
 	GSource *unpause_source;
 
 	SoupMessageGetHeadersFn   get_headers_cb;
 	SoupMessageParseHeadersFn parse_headers_cb;
-	gpointer                  user_data;
+	gpointer                  header_data;
+	SoupMessageCompletionFn   completion_cb;
+	gpointer                  completion_data;
 } SoupMessageIOData;
 	
 
@@ -98,10 +102,12 @@ soup_message_io_cleanup (SoupMessage *msg)
 		return;
 	priv->io_data = NULL;
 
+	if (io->tls_signal_id)
+		g_signal_handler_disconnect (io->sock, io->tls_signal_id);
 	if (io->sock)
 		g_object_unref (io->sock);
-	if (io->conn)
-		g_object_unref (io->conn);
+	if (io->item)
+		soup_message_queue_item_unref (io->item);
 
 	g_byte_array_free (io->read_meta_buf, TRUE);
 
@@ -115,17 +121,6 @@ soup_message_io_cleanup (SoupMessage *msg)
 	g_slice_free (SoupMessageIOData, io);
 }
 
-/**
- * soup_message_io_stop:
- * @msg: a #SoupMessage
- *
- * Immediately stops I/O on msg; if the connection would be left in an
- * inconsistent state, it will be closed.
- *
- * Note: this is a low-level function that does not cause any signals
- * to be emitted on @msg; it is up to the caller to make sure that
- * @msg doesn't get "stranded".
- **/
 void
 soup_message_io_stop (SoupMessage *msg)
 {
@@ -143,10 +138,6 @@ soup_message_io_stop (SoupMessage *msg)
 		g_signal_handler_disconnect (io->sock, io->write_tag);
 		io->write_tag = 0;
 	}
-	if (io->err_tag) {
-		g_signal_handler_disconnect (io->sock, io->err_tag);
-		io->err_tag = 0;
-	}
 
 	if (io->unpause_source) {
 		g_source_destroy (io->unpause_source);
@@ -155,26 +146,25 @@ soup_message_io_stop (SoupMessage *msg)
 
 	if (io->read_state < SOUP_MESSAGE_IO_STATE_FINISHING)
 		soup_socket_disconnect (io->sock);
-	else if (io->conn) {
-		SoupConnection *conn = io->conn;
-		io->conn = NULL;
-		soup_connection_set_state (conn, SOUP_CONNECTION_IDLE);
-		g_object_unref (conn);
-	}
+	else if (io->item && io->item->conn)
+		soup_connection_set_state (io->item->conn, SOUP_CONNECTION_IDLE);
 }
 
 #define SOUP_MESSAGE_IO_EOL            "\r\n"
 #define SOUP_MESSAGE_IO_EOL_LEN        2
 
-static void
+void
 soup_message_io_finished (SoupMessage *msg)
 {
+	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
+	SoupMessageIOData *io = priv->io_data;
+	SoupMessageCompletionFn completion_cb = io->completion_cb;
+	gpointer completion_data = io->completion_data;
+
 	g_object_ref (msg);
 	soup_message_io_cleanup (msg);
-	if (SOUP_MESSAGE_IS_STARTING (msg))
-		soup_message_restarted (msg);
-	else
-		soup_message_finished (msg);
+	if (completion_cb)
+		completion_cb (msg, completion_data);
 	g_object_unref (msg);
 }
 
@@ -193,42 +183,25 @@ io_error (SoupSocket *sock, SoupMessage *msg, GError *error)
 	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
 	SoupMessageIOData *io = priv->io_data;
 
-	if (io->mode == SOUP_MESSAGE_IO_CLIENT &&
-	    io->read_state <= SOUP_MESSAGE_IO_STATE_HEADERS &&
-	    io->read_meta_buf->len == 0 &&
-	    !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT) &&
-	    request_is_idempotent (msg)) {
+	if (error && error->domain == G_TLS_ERROR) {
+		soup_message_set_status_full (msg,
+					      SOUP_STATUS_SSL_FAILED,
+					      error->message);
+	} else if (io->mode == SOUP_MESSAGE_IO_CLIENT &&
+		   io->read_state <= SOUP_MESSAGE_IO_STATE_HEADERS &&
+		   io->read_meta_buf->len == 0 &&
+		   soup_connection_get_ever_used (io->item->conn) &&
+		   !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT) &&
+		   request_is_idempotent (msg)) {
 		/* Connection got closed, but we can safely try again */
-		priv->io_status = SOUP_MESSAGE_IO_STATUS_QUEUED;
-	} else if (!SOUP_STATUS_IS_TRANSPORT_ERROR (msg->status_code)) {
-		if (error && error->domain == SOUP_SSL_ERROR) {
-			soup_message_set_status_full (msg,
-						      SOUP_STATUS_SSL_FAILED,
-						      error->message);
-		} else
-			soup_message_set_status (msg, SOUP_STATUS_IO_ERROR);
-	}
+		io->item->state = SOUP_MESSAGE_RESTARTING;
+	} else if (!SOUP_STATUS_IS_TRANSPORT_ERROR (msg->status_code))
+		soup_message_set_status (msg, SOUP_STATUS_IO_ERROR);
+
 	if (error)
 		g_error_free (error);
 
 	soup_message_io_finished (msg);
-}
-
-static void
-io_disconnected (SoupSocket *sock, SoupMessage *msg)
-{
-	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
-	SoupMessageIOData *io = priv->io_data;
-
-	/* Closing the connection to signify EOF is sometimes ok */
-	if (io->read_state == SOUP_MESSAGE_IO_STATE_BODY &&
-	    io->read_encoding == SOUP_ENCODING_EOF) {
-		io->read_state = SOUP_MESSAGE_IO_STATE_FINISHING;
-		io_read (sock, msg);
-		return;
-	}
-
-	io_error (sock, msg, NULL);
 }
 
 static gboolean
@@ -312,14 +285,32 @@ read_metadata (SoupMessage *msg, gboolean to_blank)
 		status = soup_socket_read_until (io->sock, read_buf,
 						 sizeof (read_buf),
 						 "\n", 1, &nread, &got_lf,
-						 NULL, &error);
+						 io->cancellable, &error);
 		switch (status) {
 		case SOUP_SOCKET_OK:
 			g_byte_array_append (io->read_meta_buf, read_buf, nread);
 			break;
 
-		case SOUP_SOCKET_ERROR:
 		case SOUP_SOCKET_EOF:
+			/* More lame server handling... deal with
+			 * servers that don't send the final chunk.
+			 */
+			if (io->read_state == SOUP_MESSAGE_IO_STATE_CHUNK_SIZE &&
+			    io->read_meta_buf->len == 0) {
+				g_byte_array_append (io->read_meta_buf,
+						     (guchar *)"0\r\n", 3);
+				got_lf = TRUE;
+				break;
+			} else if (io->read_state == SOUP_MESSAGE_IO_STATE_TRAILERS &&
+				   io->read_meta_buf->len == 0) {
+				g_byte_array_append (io->read_meta_buf,
+						     (guchar *)"\r\n", 2);
+				got_lf = TRUE;
+				break;
+			}
+			/* else fall through */
+
+		case SOUP_SOCKET_ERROR:
 			io_error (io->sock, msg, error);
 			return FALSE;
 
@@ -347,10 +338,56 @@ read_metadata (SoupMessage *msg, gboolean to_blank)
 }
 
 static SoupBuffer *
+content_decode_one (SoupBuffer *buf, GConverter *converter, GError **error)
+{
+	gsize outbuf_length, outbuf_used, outbuf_cur, input_used, input_cur;
+	char *outbuf;
+	GConverterResult result;
+
+	outbuf_length = MAX (buf->length * 2, 1024);
+	outbuf = g_malloc (outbuf_length);
+	outbuf_cur = input_cur = 0;
+
+	do {
+		result = g_converter_convert (
+			converter,
+			buf->data + input_cur, buf->length - input_cur,
+			outbuf + outbuf_cur, outbuf_length - outbuf_cur,
+			0, &input_used, &outbuf_used, error);
+		input_cur += input_used;
+		outbuf_cur += outbuf_used;
+
+		if (g_error_matches (*error, G_IO_ERROR, G_IO_ERROR_NO_SPACE) ||
+		    (!*error && outbuf_cur == outbuf_length)) {
+			g_clear_error (error);
+			outbuf_length *= 2;
+			outbuf = g_realloc (outbuf, outbuf_length);
+		} else if (*error) {
+			/* GZlibDecompressor can't ever return
+			 * G_IO_ERROR_PARTIAL_INPUT unless we pass it
+			 * input_length = 0, which we don't. Other
+			 * converters might of course, so eventually
+			 * this code needs to be rewritten to deal
+			 * with that.
+			 */
+			g_free (outbuf);
+			return NULL;
+		}
+	} while (input_cur < buf->length && result != G_CONVERTER_FINISHED);
+
+	if (outbuf_cur)
+		return soup_buffer_new (SOUP_MEMORY_TAKE, outbuf, outbuf_cur);
+	else {
+		g_free (outbuf);
+		return NULL;
+	}
+}
+
+static SoupBuffer *
 content_decode (SoupMessage *msg, SoupBuffer *buf)
 {
 	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
-	SoupCoding *decoder;
+	GConverter *decoder;
 	SoupBuffer *decoded;
 	GError *error = NULL;
 	GSList *d;
@@ -358,10 +395,9 @@ content_decode (SoupMessage *msg, SoupBuffer *buf)
 	for (d = priv->decoders; d; d = d->next) {
 		decoder = d->data;
 
-		decoded = soup_coding_apply (decoder, buf->data, buf->length,
-					     FALSE, &error);
+		decoded = content_decode_one (buf, decoder, &error);
 		if (error) {
-			if (g_error_matches (error, SOUP_CODING_ERROR, SOUP_CODING_ERROR_INTERNAL_ERROR))
+			if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_FAILED))
 				g_warning ("Content-Decoding error: %s\n", error->message);
 			g_error_free (error);
 
@@ -426,7 +462,7 @@ read_body_chunk (SoupMessage *msg)
 
 		status = soup_socket_read (io->sock,
 					   (guchar *)buffer->data, len,
-					   &nread, NULL, &error);
+					   &nread, io->cancellable, &error);
 
 		if (status == SOUP_SOCKET_OK && nread) {
 			buffer->length = nread;
@@ -460,8 +496,10 @@ read_body_chunk (SoupMessage *msg)
 			break;
 
 		case SOUP_SOCKET_EOF:
-			if (read_to_eof)
+			if (io->read_eof_ok) {
+				io->read_length = 0;
 				return TRUE;
+			}
 			/* else fall through */
 
 		case SOUP_SOCKET_ERROR:
@@ -494,7 +532,8 @@ write_data (SoupMessage *msg, const char *data, guint len, gboolean body)
 		status = soup_socket_write (io->sock,
 					    data + io->written,
 					    len - io->written,
-					    &nwrote, NULL, &error);
+					    &nwrote,
+					    io->cancellable, &error);
 		switch (status) {
 		case SOUP_SOCKET_EOF:
 		case SOUP_SOCKET_ERROR:
@@ -578,7 +617,7 @@ io_write (SoupSocket *sock, SoupMessage *msg)
 		if (!io->write_buf->len) {
 			io->get_headers_cb (msg, io->write_buf,
 					    &io->write_encoding,
-					    io->user_data);
+					    io->header_data);
 			if (!io->write_buf->len) {
 				soup_message_io_pause (msg);
 				return;
@@ -822,7 +861,7 @@ io_read (SoupSocket *sock, SoupMessage *msg)
 		status = io->parse_headers_cb (msg, (char *)io->read_meta_buf->data,
 					       io->read_meta_buf->len,
 					       &io->read_encoding,
-					       io->user_data);
+					       io->header_data);
 		g_byte_array_set_size (io->read_meta_buf, 0);
 
 		if (status != SOUP_STATUS_OK) {
@@ -840,11 +879,24 @@ io_read (SoupSocket *sock, SoupMessage *msg)
 			break;
 		}
 
+		if (io->read_encoding == SOUP_ENCODING_EOF)
+			io->read_eof_ok = TRUE;
+
 		if (io->read_encoding == SOUP_ENCODING_CONTENT_LENGTH) {
 			SoupMessageHeaders *hdrs =
 				(io->mode == SOUP_MESSAGE_IO_CLIENT) ?
 				msg->response_headers : msg->request_headers;
 			io->read_length = soup_message_headers_get_content_length (hdrs);
+
+			if (io->mode == SOUP_MESSAGE_IO_CLIENT &&
+			    !soup_message_is_keepalive (msg)) {
+				/* Some servers suck and send
+				 * incorrect Content-Length values, so
+				 * allow EOF termination in this case
+				 * (iff the message is too short) too.
+				 */
+				io->read_eof_ok = TRUE;
+			}
 		}
 
 		if (io->mode == SOUP_MESSAGE_IO_CLIENT &&
@@ -996,11 +1048,32 @@ io_read (SoupSocket *sock, SoupMessage *msg)
 	goto read_more;
 }
 
+static void
+socket_tls_certificate_changed (GObject *sock, GParamSpec *pspec,
+				gpointer msg)
+{
+	GTlsCertificate *certificate;
+	GTlsCertificateFlags errors;
+
+	g_object_get (sock,
+		      SOUP_SOCKET_TLS_CERTIFICATE, &certificate,
+		      SOUP_SOCKET_TLS_ERRORS, &errors,
+		      NULL);
+	g_object_set (msg,
+		      SOUP_MESSAGE_TLS_CERTIFICATE, certificate,
+		      SOUP_MESSAGE_TLS_ERRORS, errors,
+		      NULL);
+	if (certificate)
+		g_object_unref (certificate);
+}
+
 static SoupMessageIOData *
 new_iostate (SoupMessage *msg, SoupSocket *sock, SoupMessageIOMode mode,
 	     SoupMessageGetHeadersFn get_headers_cb,
 	     SoupMessageParseHeadersFn parse_headers_cb,
-	     gpointer user_data)
+	     gpointer header_data,
+	     SoupMessageCompletionFn completion_cb,
+	     gpointer completion_data)
 {
 	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
 	SoupMessageIOData *io;
@@ -1010,7 +1083,9 @@ new_iostate (SoupMessage *msg, SoupSocket *sock, SoupMessageIOMode mode,
 	io->mode = mode;
 	io->get_headers_cb   = get_headers_cb;
 	io->parse_headers_cb = parse_headers_cb;
-	io->user_data        = user_data;
+	io->header_data      = header_data;
+	io->completion_cb    = completion_cb;
+	io->completion_data  = completion_data;
 
 	io->read_meta_buf    = g_byte_array_new ();
 	io->write_buf        = g_string_new (NULL);
@@ -1019,11 +1094,14 @@ new_iostate (SoupMessage *msg, SoupSocket *sock, SoupMessageIOMode mode,
 					  G_CALLBACK (io_read), msg);
 	io->write_tag = g_signal_connect (io->sock, "writable",
 					  G_CALLBACK (io_write), msg);
-	io->err_tag   = g_signal_connect (io->sock, "disconnected",
-					  G_CALLBACK (io_disconnected), msg);
 
 	io->read_state  = SOUP_MESSAGE_IO_STATE_NOT_STARTED;
 	io->write_state = SOUP_MESSAGE_IO_STATE_NOT_STARTED;
+
+	if (soup_socket_is_ssl (io->sock)) {
+		io->tls_signal_id = g_signal_connect (io->sock, "notify::tls-certificate",
+						      G_CALLBACK (socket_tls_certificate_changed), msg);
+	}
 
 	if (priv->io_data)
 		soup_message_io_cleanup (msg);
@@ -1032,37 +1110,44 @@ new_iostate (SoupMessage *msg, SoupSocket *sock, SoupMessageIOMode mode,
 }
 
 void
-soup_message_io_client (SoupMessage *msg, SoupSocket *sock,
-			SoupConnection *conn,
+soup_message_io_client (SoupMessageQueueItem *item,
 			SoupMessageGetHeadersFn get_headers_cb,
 			SoupMessageParseHeadersFn parse_headers_cb,
-			gpointer user_data)
+			gpointer header_data,
+			SoupMessageCompletionFn completion_cb,
+			gpointer completion_data)
 {
 	SoupMessageIOData *io;
+	SoupSocket *sock = soup_connection_get_socket (item->conn);
 
-	io = new_iostate (msg, sock, SOUP_MESSAGE_IO_CLIENT,
-			  get_headers_cb, parse_headers_cb, user_data);
+	io = new_iostate (item->msg, sock, SOUP_MESSAGE_IO_CLIENT,
+			  get_headers_cb, parse_headers_cb, header_data,
+			  completion_cb, completion_data);
 
-	if (conn)
-		io->conn = g_object_ref (conn);
+	io->item = item;
+	soup_message_queue_item_ref (item);
+	io->cancellable = item->cancellable;
 
-	io->read_body       = msg->response_body;
-	io->write_body      = msg->request_body;
+	io->read_body       = item->msg->response_body;
+	io->write_body      = item->msg->request_body;
 
 	io->write_state     = SOUP_MESSAGE_IO_STATE_HEADERS;
-	io_write (sock, msg);
+	io_write (sock, item->msg);
 }
 
 void
 soup_message_io_server (SoupMessage *msg, SoupSocket *sock,
 			SoupMessageGetHeadersFn get_headers_cb,
 			SoupMessageParseHeadersFn parse_headers_cb,
-			gpointer user_data)
+			gpointer header_data,
+			SoupMessageCompletionFn completion_cb,
+			gpointer completion_data)
 {
 	SoupMessageIOData *io;
 
 	io = new_iostate (msg, sock, SOUP_MESSAGE_IO_SERVER,
-			  get_headers_cb, parse_headers_cb, user_data);
+			  get_headers_cb, parse_headers_cb, header_data,
+			  completion_cb, completion_data);
 
 	io->read_body       = msg->request_body;
 	io->write_body      = msg->response_body;

@@ -301,7 +301,7 @@ do_xmlrpc_tests (SoupURI *uri)
 gboolean run_tests = TRUE;
 
 static GOptionEntry no_test_entry[] = {
-        { "no-tests", 'n', G_OPTION_FLAG_NO_ARG | G_OPTION_FLAG_REVERSE,
+        { "no-tests", 'n', G_OPTION_FLAG_REVERSE,
           G_OPTION_ARG_NONE, &run_tests,
           "Don't run tests, just run the test server", NULL },
         { NULL }
@@ -332,6 +332,7 @@ main (int argc, char **argv)
 	g_main_loop_run (loop);
 	g_main_loop_unref (loop);
 
+	soup_test_server_quit_unref (server);
 	if (run_tests)
 		test_cleanup ();
 	return errors != 0;

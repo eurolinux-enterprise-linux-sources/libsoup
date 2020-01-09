@@ -2,6 +2,9 @@
 /* Generated data (by glib-mkenums) */
 
 #include "soup.h"
+#define LIBSOUP_USE_UNSTABLE_REQUEST_API
+#include "soup-cache.h"
+#include "soup-requester.h"
 /* enumerations from "soup-address.h" */
 GType
 soup_address_family_get_type (void)
@@ -15,6 +18,72 @@ soup_address_family_get_type (void)
 			{ 0, NULL, NULL }
 		};
 		etype = g_enum_register_static (g_intern_static_string ("SoupAddressFamily"), values);
+	}
+	return etype;
+}
+
+/* enumerations from "soup-cache.h" */
+GType
+soup_cacheability_get_type (void)
+{
+	static GType etype = 0;
+	if (G_UNLIKELY (etype == 0)) {
+		static const GFlagsValue values[] = {
+			{ SOUP_CACHE_CACHEABLE, "SOUP_CACHE_CACHEABLE", "cacheable" },
+			{ SOUP_CACHE_UNCACHEABLE, "SOUP_CACHE_UNCACHEABLE", "uncacheable" },
+			{ SOUP_CACHE_INVALIDATES, "SOUP_CACHE_INVALIDATES", "invalidates" },
+			{ SOUP_CACHE_VALIDATES, "SOUP_CACHE_VALIDATES", "validates" },
+			{ 0, NULL, NULL }
+		};
+		etype = g_flags_register_static (g_intern_static_string ("SoupCacheability"), values);
+	}
+	return etype;
+}
+
+GType
+soup_cache_response_get_type (void)
+{
+	static GType etype = 0;
+	if (G_UNLIKELY (etype == 0)) {
+		static const GEnumValue values[] = {
+			{ SOUP_CACHE_RESPONSE_FRESH, "SOUP_CACHE_RESPONSE_FRESH", "fresh" },
+			{ SOUP_CACHE_RESPONSE_NEEDS_VALIDATION, "SOUP_CACHE_RESPONSE_NEEDS_VALIDATION", "needs-validation" },
+			{ SOUP_CACHE_RESPONSE_STALE, "SOUP_CACHE_RESPONSE_STALE", "stale" },
+			{ 0, NULL, NULL }
+		};
+		etype = g_enum_register_static (g_intern_static_string ("SoupCacheResponse"), values);
+	}
+	return etype;
+}
+
+GType
+soup_cache_type_get_type (void)
+{
+	static GType etype = 0;
+	if (G_UNLIKELY (etype == 0)) {
+		static const GEnumValue values[] = {
+			{ SOUP_CACHE_SINGLE_USER, "SOUP_CACHE_SINGLE_USER", "single-user" },
+			{ SOUP_CACHE_SHARED, "SOUP_CACHE_SHARED", "shared" },
+			{ 0, NULL, NULL }
+		};
+		etype = g_enum_register_static (g_intern_static_string ("SoupCacheType"), values);
+	}
+	return etype;
+}
+
+/* enumerations from "soup-cookie-jar.h" */
+GType
+soup_cookie_jar_accept_policy_get_type (void)
+{
+	static GType etype = 0;
+	if (G_UNLIKELY (etype == 0)) {
+		static const GEnumValue values[] = {
+			{ SOUP_COOKIE_JAR_ACCEPT_ALWAYS, "SOUP_COOKIE_JAR_ACCEPT_ALWAYS", "always" },
+			{ SOUP_COOKIE_JAR_ACCEPT_NEVER, "SOUP_COOKIE_JAR_ACCEPT_NEVER", "never" },
+			{ SOUP_COOKIE_JAR_ACCEPT_NO_THIRD_PARTY, "SOUP_COOKIE_JAR_ACCEPT_NO_THIRD_PARTY", "no-third-party" },
+			{ 0, NULL, NULL }
+		};
+		etype = g_enum_register_static (g_intern_static_string ("SoupCookieJarAcceptPolicy"), values);
 	}
 	return etype;
 }
@@ -65,8 +134,8 @@ soup_http_version_get_type (void)
 	static GType etype = 0;
 	if (G_UNLIKELY (etype == 0)) {
 		static const GEnumValue values[] = {
-			{ SOUP_HTTP_1_0, "SOUP_HTTP_1_0", "0" },
-			{ SOUP_HTTP_1_1, "SOUP_HTTP_1_1", "1" },
+			{ SOUP_HTTP_1_0, "SOUP_HTTP_1_0", "http-1-0" },
+			{ SOUP_HTTP_1_1, "SOUP_HTTP_1_1", "http-1-1" },
 			{ 0, NULL, NULL }
 		};
 		etype = g_enum_register_static (g_intern_static_string ("SoupHTTPVersion"), values);
@@ -83,6 +152,7 @@ soup_message_flags_get_type (void)
 			{ SOUP_MESSAGE_NO_REDIRECT, "SOUP_MESSAGE_NO_REDIRECT", "no-redirect" },
 			{ SOUP_MESSAGE_OVERWRITE_CHUNKS, "SOUP_MESSAGE_OVERWRITE_CHUNKS", "overwrite-chunks" },
 			{ SOUP_MESSAGE_CONTENT_DECODED, "SOUP_MESSAGE_CONTENT_DECODED", "content-decoded" },
+			{ SOUP_MESSAGE_CERTIFICATE_TRUSTED, "SOUP_MESSAGE_CERTIFICATE_TRUSTED", "certificate-trusted" },
 			{ 0, NULL, NULL }
 		};
 		etype = g_flags_register_static (g_intern_static_string ("SoupMessageFlags"), values);
@@ -169,9 +239,45 @@ soup_ssl_error_get_type (void)
 			{ SOUP_SSL_ERROR_HANDSHAKE_NEEDS_READ, "SOUP_SSL_ERROR_HANDSHAKE_NEEDS_READ", "handshake-needs-read" },
 			{ SOUP_SSL_ERROR_HANDSHAKE_NEEDS_WRITE, "SOUP_SSL_ERROR_HANDSHAKE_NEEDS_WRITE", "handshake-needs-write" },
 			{ SOUP_SSL_ERROR_CERTIFICATE, "SOUP_SSL_ERROR_CERTIFICATE", "certificate" },
+			{ SOUP_SSL_ERROR_HANDSHAKE_FAILED, "SOUP_SSL_ERROR_HANDSHAKE_FAILED", "handshake-failed" },
 			{ 0, NULL, NULL }
 		};
 		etype = g_enum_register_static (g_intern_static_string ("SoupSSLError"), values);
+	}
+	return etype;
+}
+
+GType
+soup_connection_state_get_type (void)
+{
+	static GType etype = 0;
+	if (G_UNLIKELY (etype == 0)) {
+		static const GEnumValue values[] = {
+			{ SOUP_CONNECTION_NEW, "SOUP_CONNECTION_NEW", "new" },
+			{ SOUP_CONNECTION_CONNECTING, "SOUP_CONNECTION_CONNECTING", "connecting" },
+			{ SOUP_CONNECTION_IDLE, "SOUP_CONNECTION_IDLE", "idle" },
+			{ SOUP_CONNECTION_IN_USE, "SOUP_CONNECTION_IN_USE", "in-use" },
+			{ SOUP_CONNECTION_REMOTE_DISCONNECTED, "SOUP_CONNECTION_REMOTE_DISCONNECTED", "remote-disconnected" },
+			{ SOUP_CONNECTION_DISCONNECTED, "SOUP_CONNECTION_DISCONNECTED", "disconnected" },
+			{ 0, NULL, NULL }
+		};
+		etype = g_enum_register_static (g_intern_static_string ("SoupConnectionState"), values);
+	}
+	return etype;
+}
+
+/* enumerations from "soup-requester.h" */
+GType
+soup_requester_error_get_type (void)
+{
+	static GType etype = 0;
+	if (G_UNLIKELY (etype == 0)) {
+		static const GEnumValue values[] = {
+			{ SOUP_REQUESTER_ERROR_BAD_URI, "SOUP_REQUESTER_ERROR_BAD_URI", "bad-uri" },
+			{ SOUP_REQUESTER_ERROR_UNSUPPORTED_URI_SCHEME, "SOUP_REQUESTER_ERROR_UNSUPPORTED_URI_SCHEME", "unsupported-uri-scheme" },
+			{ 0, NULL, NULL }
+		};
+		etype = g_enum_register_static (g_intern_static_string ("SoupRequesterError"), values);
 	}
 	return etype;
 }
@@ -211,6 +317,7 @@ soup_known_status_code_get_type (void)
 			{ SOUP_STATUS_IO_ERROR, "SOUP_STATUS_IO_ERROR", "io-error" },
 			{ SOUP_STATUS_MALFORMED, "SOUP_STATUS_MALFORMED", "malformed" },
 			{ SOUP_STATUS_TRY_AGAIN, "SOUP_STATUS_TRY_AGAIN", "try-again" },
+			{ SOUP_STATUS_TOO_MANY_REDIRECTS, "SOUP_STATUS_TOO_MANY_REDIRECTS", "too-many-redirects" },
 			{ SOUP_STATUS_CONTINUE, "SOUP_STATUS_CONTINUE", "continue" },
 			{ SOUP_STATUS_SWITCHING_PROTOCOLS, "SOUP_STATUS_SWITCHING_PROTOCOLS", "switching-protocols" },
 			{ SOUP_STATUS_PROCESSING, "SOUP_STATUS_PROCESSING", "processing" },

@@ -8,8 +8,6 @@
 
 #include <sys/types.h>
 
-#include <gio/gio.h>
-
 #include <libsoup/soup-portability.h>
 #include <libsoup/soup-types.h>
 
@@ -78,6 +76,7 @@ const char      *soup_address_get_physical       (SoupAddress         *addr);
 guint            soup_address_get_port           (SoupAddress         *addr);
 struct sockaddr *soup_address_get_sockaddr       (SoupAddress         *addr,
 						  int                 *len);
+GSocketAddress  *soup_address_get_gsockaddr      (SoupAddress         *addr);
 gboolean         soup_address_is_resolved        (SoupAddress         *addr);
 
 guint            soup_address_hash_by_name       (gconstpointer        addr);

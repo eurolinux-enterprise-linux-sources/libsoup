@@ -46,9 +46,9 @@ soup_proxy_uri_resolver_get_type (void)
  * soup_proxy_uri_resolver_get_proxy_uri_async:
  * @proxy_uri_resolver: the #SoupProxyURIResolver
  * @uri: the #SoupURI you want a proxy for
- * @async_context: the #GMainContext to invoke @callback in
+ * @async_context: (allow-none): the #GMainContext to invoke @callback in
  * @cancellable: a #GCancellable, or %NULL
- * @callback: callback to invoke with the proxy address
+ * @callback: (scope async): callback to invoke with the proxy address
  * @user_data: data for @callback
  *
  * Asynchronously determines a proxy URI to use for @msg and calls

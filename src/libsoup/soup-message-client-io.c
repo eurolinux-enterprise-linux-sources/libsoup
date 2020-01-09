@@ -12,9 +12,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "soup-connection.h"
 #include "soup-message-private.h"
 #include "soup-auth.h"
+#include "soup-connection.h"
 #include "soup-headers.h"
+#include "soup-message-queue.h"
 #include "soup-uri.h"
 
 static guint
@@ -56,18 +59,6 @@ parse_response_headers (SoupMessage *req,
 	if (*encoding == SOUP_ENCODING_UNRECOGNIZED)
 		return SOUP_STATUS_MALFORMED;
 
-        /* mirror Mozilla here:
-         * (see netwerk/protocol/http/src/nsHttpTransaction.cpp for details)
-         *
-         * HTTP servers have been known to send erroneous Content-Length headers.
-         * So, unless the connection is persistent, we must make allowances for a
-         * possibly invalid Content-Length header. Thus, if NOT persistent, we 
-         * simply accept the whole message.
-         */
-        if (*encoding == SOUP_ENCODING_CONTENT_LENGTH &&
-            !soup_message_is_keepalive (req))
-                *encoding = SOUP_ENCODING_EOF;
-
 	return SOUP_STATUS_OK;
 }
 
@@ -76,7 +67,7 @@ get_request_headers (SoupMessage *req, GString *header,
 		     SoupEncoding *encoding, gpointer user_data)
 {
 	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (req);
-	gboolean proxy = GPOINTER_TO_UINT (user_data);
+	SoupMessageQueueItem *item = user_data;
 	SoupURI *uri = soup_message_get_uri (req);
 	char *uri_host;
 	char *uri_string;
@@ -85,6 +76,8 @@ get_request_headers (SoupMessage *req, GString *header,
 
 	if (strchr (uri->host, ':'))
 		uri_host = g_strdup_printf ("[%s]", uri->host);
+	else if (g_hostname_is_non_ascii (uri->host))
+		uri_host = g_hostname_to_ascii (uri->host);
 	else
 		uri_host = uri->host;
 
@@ -92,10 +85,19 @@ get_request_headers (SoupMessage *req, GString *header,
 		/* CONNECT URI is hostname:port for tunnel destination */
 		uri_string = g_strdup_printf ("%s:%d", uri_host, uri->port);
 	} else {
+		gboolean proxy = soup_connection_is_via_proxy (item->conn);
+
 		/* Proxy expects full URI to destination. Otherwise
 		 * just the path.
 		 */
 		uri_string = soup_uri_to_string (uri, !proxy);
+
+		if (proxy && uri->fragment) {
+			/* Strip fragment */
+			char *fragment = strchr (uri_string, '#');
+			if (fragment)
+				*fragment = '\0';
+		}
 	}
 
 	if (priv->http_version == SOUP_HTTP_1_0) {
@@ -136,12 +138,14 @@ get_request_headers (SoupMessage *req, GString *header,
 }
 
 void
-soup_message_send_request (SoupMessage *req, SoupSocket *sock,
-			   SoupConnection *conn, gboolean is_via_proxy)
+soup_message_send_request (SoupMessageQueueItem      *item,
+			   SoupMessageCompletionFn    completion_cb,
+			   gpointer                   user_data)
 {
-	soup_message_cleanup_response (req);
-	soup_message_io_client (req, sock, conn,
+	soup_message_cleanup_response (item->msg);
+	soup_message_io_client (item,
 				get_request_headers,
 				parse_response_headers,
-				GUINT_TO_POINTER (is_via_proxy));
+				item,
+				completion_cb, user_data);
 }

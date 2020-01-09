@@ -200,18 +200,30 @@ soup_date_new (int year, int month, int day,
  * current time (or before it, if @offset_seconds is negative). If
  * offset_seconds is 0, returns the current time.
  *
+ * If @offset_seconds would indicate a time not expressible as a
+ * #time_t, the return value will be clamped into range.
+ *
  * Return value: a new #SoupDate
  **/
 SoupDate *
 soup_date_new_from_now (int offset_seconds)
 {
-	return soup_date_new_from_time_t (time (NULL) + offset_seconds);
+	time_t now = time (NULL);
+	time_t then = now + offset_seconds;
+
+	if (sizeof (time_t) == 4) {
+		if (offset_seconds < 0 && then > now)
+			return soup_date_new_from_time_t (-G_MAXINT);
+		else if (offset_seconds > 0 && then < now)
+			return soup_date_new_from_time_t (G_MAXINT);
+	}
+	return soup_date_new_from_time_t (then);
 }
 
 static gboolean
 parse_iso8601_date (SoupDate *date, const char *date_string)
 {
-	gulong val, ignored;
+	gulong val;
 
 	if (strlen (date_string) < 15)
 		return FALSE;
@@ -250,7 +262,7 @@ parse_iso8601_date (SoupDate *date, const char *date_string)
 		return FALSE;
 
 	if (*date_string == '.' || *date_string == ',')
-		ignored = strtoul (date_string + 1, (char **)&date_string, 10);
+		(void) strtoul (date_string + 1, (char **)&date_string, 10);
 
 	if (*date_string == 'Z') {
 		date_string++;
@@ -294,7 +306,7 @@ parse_month (SoupDate *date, const char **date_string)
 	int i;
 
 	for (i = 0; i < G_N_ELEMENTS (months); i++) {
-		if (!strncmp (*date_string, months[i], 3)) {
+		if (!g_ascii_strncasecmp (*date_string, months[i], 3)) {
 			date->month = i + 1;
 			*date_string += 3;
 			while (**date_string == ' ' || **date_string == '-')
@@ -355,7 +367,10 @@ parse_time (SoupDate *date, const char **date_string)
 static inline gboolean
 parse_timezone (SoupDate *date, const char **date_string)
 {
-	if (**date_string == '+' || **date_string == '-') {
+	if (!**date_string) {
+		date->utc = FALSE;
+		date->offset = 0;
+	} else if (**date_string == '+' || **date_string == '-') {
 		gulong val;
 		int sign = (**date_string == '+') ? -1 : 1;
 		val = strtoul (*date_string + 1, (char **)date_string, 10);
@@ -381,9 +396,6 @@ parse_timezone (SoupDate *date, const char **date_string)
 		if ((*date_string)[1] == 'D')
 			date->offset += 60;
 		date->utc = FALSE;
-	} else if (!**date_string) {
-		date->utc = FALSE;
-		date->offset = 0;
 	} else
 		return FALSE;
 	return TRUE;
@@ -722,7 +734,7 @@ soup_date_to_time_t (SoupDate *date)
 /**
  * soup_date_to_timeval:
  * @date: a #SoupDate
- * @time: a #GTimeVal structure in which to store the converted time.
+ * @time: (out): a #GTimeVal structure in which to store the converted time.
  *
  * Converts @date to a #GTimeVal.
  *
@@ -757,10 +769,140 @@ soup_date_is_past (SoupDate *date)
 	g_return_val_if_fail (date != NULL, TRUE);
 
 	/* optimization */
-	if (date->year < 2008)
+	if (date->year < 2010)
 		return TRUE;
 
 	return soup_date_to_time_t (date) < time (NULL);
+}
+
+/**
+ * soup_date_get_year:
+ * @date: a #SoupDate
+ *
+ * Gets @date's year.
+ *
+ * Return value: @date's year
+ *
+ * Since: 2.32
+ **/
+int
+soup_date_get_year (SoupDate *date)
+{
+	return date->year;
+}
+
+/**
+ * soup_date_get_month:
+ * @date: a #SoupDate
+ *
+ * Gets @date's month.
+ *
+ * Return value: @date's month
+ *
+ * Since: 2.32
+ **/
+int
+soup_date_get_month (SoupDate *date)
+{
+	return date->month;
+}
+
+/**
+ * soup_date_get_day:
+ * @date: a #SoupDate
+ *
+ * Gets @date's day.
+ *
+ * Return value: @date's day
+ *
+ * Since: 2.32
+ **/
+int
+soup_date_get_day (SoupDate *date)
+{
+	return date->day;
+}
+
+/**
+ * soup_date_get_hour:
+ * @date: a #SoupDate
+ *
+ * Gets @date's hour.
+ *
+ * Return value: @date's hour
+ *
+ * Since: 2.32
+ **/
+int
+soup_date_get_hour (SoupDate *date)
+{
+	return date->hour;
+}
+
+/**
+ * soup_date_get_minute:
+ * @date: a #SoupDate
+ *
+ * Gets @date's minute.
+ *
+ * Return value: @date's minute
+ *
+ * Since: 2.32
+ **/
+int
+soup_date_get_minute (SoupDate *date)
+{
+	return date->minute;
+}
+
+/**
+ * soup_date_get_second:
+ * @date: a #SoupDate
+ *
+ * Gets @date's second.
+ *
+ * Return value: @date's second
+ *
+ * Since: 2.32
+ **/
+int
+soup_date_get_second (SoupDate *date)
+{
+	return date->second;
+}
+
+/**
+ * soup_date_get_utc:
+ * @date: a #SoupDate
+ *
+ * Gets @date's UTC flag
+ *
+ * Return value: %TRUE if @date is UTC.
+ *
+ * Since: 2.32
+ **/
+gboolean
+soup_date_get_utc (SoupDate *date)
+{
+	return date->utc;
+}
+
+/**
+ * soup_date_get_offset:
+ * @date: a #SoupDate
+ *
+ * Gets @date's offset from UTC.
+ *
+ * Return value: @date's offset from UTC. If soup_date_get_utc()
+ * returns %FALSE but soup_date_get_offset() returns 0, that means the
+ * date is a "floating" time with no associated offset information.
+ *
+ * Since: 2.32
+ **/
+int
+soup_date_get_offset (SoupDate *date)
+{
+	return date->offset;
 }
 
 /**

@@ -10,6 +10,7 @@
 #include <stdlib.h>
 
 #include "soup-uri.h"
+#include "soup-uri-private.h"
 #include "soup-form.h"
 #include "soup-misc.h"
 
@@ -68,7 +69,7 @@
  * #SoupURI will have a @path of "/".
  *
  * @query and @fragment are optional for all URI types.
- * soup_form_decode_urlencoded() may be useful for parsing @query.
+ * soup_form_decode() may be useful for parsing @query.
  *
  * Note that @path, @query, and @fragment may contain
  * %<!-- -->-encoded characters. soup_uri_new() calls
@@ -92,13 +93,14 @@
  **/
 
 static void append_uri_encoded (GString *str, const char *in, const char *extra_enc_chars);
-static char *uri_decoded_copy (const char *str, int length);
-static char *uri_normalized_copy (const char *str, int length, const char *unescape_extra, gboolean fixup);
+static char *uri_normalized_copy (const char *str, int length, const char *unescape_extra);
 
 gpointer _SOUP_URI_SCHEME_HTTP, _SOUP_URI_SCHEME_HTTPS;
+gpointer _SOUP_URI_SCHEME_FTP;
+gpointer _SOUP_URI_SCHEME_FILE, _SOUP_URI_SCHEME_DATA;
 
 static inline const char *
-soup_uri_get_scheme (const char *scheme, int len)
+soup_uri_parse_scheme (const char *scheme, int len)
 {
 	if (len == 4 && !g_ascii_strncasecmp (scheme, "http", len)) {
 		return SOUP_URI_SCHEME_HTTP;
@@ -122,6 +124,8 @@ soup_scheme_default_port (const char *scheme)
 		return 80;
 	else if (scheme == SOUP_URI_SCHEME_HTTPS)
 		return 443;
+	else if (scheme == SOUP_URI_SCHEME_FTP)
+		return 21;
 	else
 		return 0;
 }
@@ -142,24 +146,43 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 	const char *end, *hash, *colon, *at, *path, *question;
 	const char *p, *hostend;
 	gboolean remove_dot_segments = TRUE;
+	int len;
+
+	/* First some cleanup steps (which are supposed to all be no-ops,
+	 * but...). Skip initial whitespace, strip out internal tabs and
+	 * line breaks, and ignore trailing whitespace.
+	 */
+	while (g_ascii_isspace (*uri_string))
+		uri_string++;
+
+	len = strcspn (uri_string, "\t\n\r");
+	if (uri_string[len]) {
+		char *clean = g_malloc (strlen (uri_string) + 1), *d;
+		const char *s;
+
+		for (s = uri_string, d = clean; *s; s++) {
+			if (*s != '\t' && *s != '\n' && *s != '\r')
+				*d++ = *s;
+		}
+		*d = '\0';
+
+		uri = soup_uri_new_with_base (base, clean);
+		g_free (clean);
+		return uri;
+	}
+	end = uri_string + len;
+	while (end > uri_string && g_ascii_isspace (end[-1]))
+		end--;
 
 	uri = g_slice_new0 (SoupURI);
 
-	/* See RFC 3986 for details. IF YOU CHANGE ANYTHING IN THIS
-	 * FUNCTION, RUN tests/uri-parsing AFTERWARDS.
-	 */
-
 	/* Find fragment. */
-	end = hash = strchr (uri_string, '#');
-	if (hash && hash[1]) {
-		uri->fragment = uri_normalized_copy (hash + 1, strlen (hash + 1),
-						     NULL, FALSE);
-		if (!uri->fragment) {
-			soup_uri_free (uri);
-			return NULL;
-		}
-	} else
-		end = uri_string + strlen (uri_string);
+	hash = strchr (uri_string, '#');
+	if (hash) {
+		uri->fragment = uri_normalized_copy (hash + 1, end - hash + 1,
+						     NULL);
+		end = hash;
+	}
 
 	/* Find scheme: initial [a-z+.-]* substring until ":" */
 	p = uri_string;
@@ -168,15 +191,11 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 		p++;
 
 	if (p > uri_string && *p == ':') {
-		uri->scheme = soup_uri_get_scheme (uri_string, p - uri_string);
-		if (!uri->scheme) {
-			soup_uri_free (uri);
-			return NULL;
-		}
+		uri->scheme = soup_uri_parse_scheme (uri_string, p - uri_string);
 		uri_string = p + 1;
 	}
 
-	if (!*uri_string && !base)
+	if (uri_string == end && !base && !uri->fragment)
 		return uri;
 
 	/* Check for authority */
@@ -184,16 +203,14 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 		uri_string += 2;
 
 		path = uri_string + strcspn (uri_string, "/?#");
+		if (path > end)
+			path = end;
 		at = strchr (uri_string, '@');
 		if (at && at < path) {
 			colon = strchr (uri_string, ':');
 			if (colon && colon < at) {
 				uri->password = uri_decoded_copy (colon + 1,
 								  at - colon - 1);
-				if (!uri->password) {
-					soup_uri_free (uri);
-					return NULL;
-				}
 			} else {
 				uri->password = NULL;
 				colon = at;
@@ -201,10 +218,6 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 
 			uri->user = uri_decoded_copy (uri_string,
 						      colon - uri_string);
-			if (!uri->user) {
-				soup_uri_free (uri);
-				return NULL;
-			}
 			uri_string = at + 1;
 		} else
 			uri->user = uri->password = NULL;
@@ -227,10 +240,6 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 		}
 
 		uri->host = uri_decoded_copy (uri_string, hostend - uri_string);
-		if (!uri->host) {
-			soup_uri_free (uri);
-			return NULL;
-		}
 
 		if (colon && colon != path - 1) {
 			char *portend;
@@ -249,24 +258,16 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 	if (question) {
 		uri->query = uri_normalized_copy (question + 1,
 						  end - (question + 1),
-						  NULL, TRUE);
-		if (!uri->query) {
-			soup_uri_free (uri);
-			return NULL;
-		}
+						  NULL);
 		end = question;
 	}
 
 	if (end != uri_string) {
 		uri->path = uri_normalized_copy (uri_string, end - uri_string,
-						 NULL, TRUE);
-		if (!uri->path) {
-			soup_uri_free (uri);
-			return NULL;
-		}
+						 NULL);
 	}
 
-	/* Apply base URI. Again, this is spelled out in RFC 3986. */
+	/* Apply base URI. This is spelled out in RFC 3986. */
 	if (base && !uri->scheme && uri->host)
 		uri->scheme = base->scheme;
 	else if (base && !uri->scheme) {
@@ -286,8 +287,8 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 
 			last = strrchr (base->path, '/');
 			if (last) {
-				newpath = g_strdup_printf ("%.*s/%s",
-							   (int)(last - base->path),
+				newpath = g_strdup_printf ("%.*s%s",
+							   (int)(last + 1 - base->path),
 							   base->path,
 							   uri->path);
 			} else
@@ -299,7 +300,7 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 	}
 
 	if (remove_dot_segments && uri->path && *uri->path) {
-		char *p = uri->path, *q;
+		char *p, *q;
 
 		/* Remove "./" where "." is a complete segment. */
 		for (p = uri->path + 1; *p; ) {
@@ -353,6 +354,13 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 		if (!uri->path)
 			uri->path = g_strdup ("/");
 		if (!SOUP_URI_VALID_FOR_HTTP (uri)) {
+			soup_uri_free (uri);
+			return NULL;
+		}
+	}
+
+	if (uri->scheme == SOUP_URI_SCHEME_FTP) {
+		if (!uri->host) {
 			soup_uri_free (uri);
 			return NULL;
 		}
@@ -441,7 +449,7 @@ soup_uri_to_string (SoupURI *uri, gboolean just_path_and_query)
 		} else
 			append_uri_encoded (str, uri->host, ":/");
 		if (uri->port && uri->port != soup_scheme_default_port (uri->scheme))
-			g_string_append_printf (str, ":%d", uri->port);
+			g_string_append_printf (str, ":%u", uri->port);
 		if (!uri->path && (uri->query || uri->fragment))
 			g_string_append_c (str, '/');
 	}
@@ -548,37 +556,14 @@ soup_uri_free (SoupURI *uri)
 	g_slice_free (SoupURI, uri);
 }
 
-/* From RFC 3986 */
-#define SOUP_URI_UNRESERVED  0
-#define SOUP_URI_PCT_ENCODED 1
-#define SOUP_URI_GEN_DELIMS  2
-#define SOUP_URI_SUB_DELIMS  4
-static const char uri_encoded_char[] = {
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /* 0x00 - 0x0f */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,  /* 0x10 - 0x1f */
-	1, 4, 1, 2, 4, 1, 4, 4, 4, 4, 4, 4, 4, 0, 0, 2,  /*  !"#$%&'()*+,-./ */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 4, 1, 4, 1, 2,  /* 0123456789:;<=>? */
-	2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /* @ABCDEFGHIJKLMNO */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1, 2, 1, 0,  /* PQRSTUVWXYZ[\]^_ */
-	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  /* `abcdefghijklmno */
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1,  /* pqrstuvwxyz{|}~  */
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
-};
-
 static void
 append_uri_encoded (GString *str, const char *in, const char *extra_enc_chars)
 {
 	const unsigned char *s = (const unsigned char *)in;
 
 	while (*s) {
-		if ((uri_encoded_char[*s] & (SOUP_URI_PCT_ENCODED | SOUP_URI_GEN_DELIMS)) ||
+		if (soup_char_is_uri_percent_encoded (*s) ||
+		    soup_char_is_uri_gen_delims (*s) ||
 		    (extra_enc_chars && strchr (extra_enc_chars, *s)))
 			g_string_append_printf (str, "%%%02X", (int)*s++);
 		else
@@ -614,7 +599,7 @@ soup_uri_encode (const char *part, const char *escape_extra)
 #define XDIGIT(c) ((c) <= '9' ? (c) - '0' : ((c) & 0x4F) - 'A' + 10)
 #define HEXCHAR(s) ((XDIGIT (s[1]) << 4) + XDIGIT (s[2]))
 
-static char *
+char *
 uri_decoded_copy (const char *part, int length)
 {
 	unsigned char *s, *d;
@@ -625,8 +610,8 @@ uri_decoded_copy (const char *part, int length)
 		if (*s == '%') {
 			if (!g_ascii_isxdigit (s[1]) ||
 			    !g_ascii_isxdigit (s[2])) {
-				g_free (decoded);
-				return NULL;
+				*d++ = *s;
+				continue;
 			}
 			*d++ = HEXCHAR (s);
 			s += 2;
@@ -643,8 +628,11 @@ uri_decoded_copy (const char *part, int length)
  *
  * Fully %<!-- -->-decodes @part.
  *
- * Return value: the decoded URI part, or %NULL if an invalid percent
- * code was encountered.
+ * In the past, this would return %NULL if @part contained invalid
+ * percent-encoding, but now it just ignores the problem (as
+ * soup_uri_new() already did).
+ *
+ * Return value: the decoded URI part.
  */
 char *
 soup_uri_decode (const char *part)
@@ -654,7 +642,7 @@ soup_uri_decode (const char *part)
 
 static char *
 uri_normalized_copy (const char *part, int length,
-		     const char *unescape_extra, gboolean fixup)
+		     const char *unescape_extra)
 {
 	unsigned char *s, *d, c;
 	char *normalized = g_strndup (part, length);
@@ -665,19 +653,23 @@ uri_normalized_copy (const char *part, int length,
 		if (*s == '%') {
 			if (!g_ascii_isxdigit (s[1]) ||
 			    !g_ascii_isxdigit (s[2])) {
-				g_free (normalized);
-				return NULL;
+				*d++ = *s;
+				continue;
 			}
 
 			c = HEXCHAR (s);
-			if (uri_encoded_char[c] == SOUP_URI_UNRESERVED ||
+			if (soup_char_is_uri_unreserved (c) ||
 			    (unescape_extra && strchr (unescape_extra, c))) {
 				*d++ = c;
 				s += 2;
 			} else {
+				/* We leave it unchanged. We used to uppercase percent-encoded
+				 * triplets but we do not do it any more as RFC3986 Section 6.2.2.1
+				 * says that they only SHOULD be case normalized.
+				 */
 				*d++ = *s++;
-				*d++ = g_ascii_toupper (*s++);
-				*d++ = g_ascii_toupper (*s);
+				*d++ = *s++;
+				*d++ = *s;
 			}
 		} else {
 			if (*s == ' ')
@@ -686,18 +678,20 @@ uri_normalized_copy (const char *part, int length,
 		}
 	} while (*s++);
 
-	if (fixup && need_fixup) {
-		char *tmp, *sp;
-		/* This code is lame, but so are people who put
-		 * unencoded spaces in URLs!
-		 */
-		while ((sp = strchr (normalized, ' '))) {
-			tmp = g_strdup_printf ("%.*s%%20%s",
-					       (int)(sp - normalized),
-					       normalized, sp + 1);
-			g_free (normalized);
-			normalized = tmp;
-		};
+	if (need_fixup) {
+		GString *fixed;
+		char *sp, *p;
+
+		fixed = g_string_new (NULL);
+		p = normalized;
+		while ((sp = strchr (p, ' '))) {
+			g_string_append_len (fixed, p, sp - p);
+			g_string_append (fixed, "%20");
+			p = sp + 1;
+		}
+		g_string_append (fixed, p);
+		g_free (normalized);
+		normalized = g_string_free (fixed, FALSE);
 	}
 
 	return normalized;
@@ -721,13 +715,16 @@ uri_normalized_copy (const char *part, int length,
  * be changed, because it might mean something different to the
  * server.
  *
- * Return value: the normalized URI part, or %NULL if an invalid percent
- * code was encountered.
+ * In the past, this would return %NULL if @part contained invalid
+ * percent-encoding, but now it just ignores the problem (as
+ * soup_uri_new() already did).
+ *
+ * Return value: the normalized URI part
  */
 char *
 soup_uri_normalize (const char *part, const char *unescape_extra)
 {
-	return uri_normalized_copy (part, strlen (part), unescape_extra, FALSE);
+	return uri_normalized_copy (part, strlen (part), unescape_extra);
 }
 
 
@@ -745,7 +742,8 @@ gboolean
 soup_uri_uses_default_port (SoupURI *uri)
 {
 	g_return_val_if_fail (uri->scheme == SOUP_URI_SCHEME_HTTP ||
-			      uri->scheme == SOUP_URI_SCHEME_HTTPS, FALSE);
+			      uri->scheme == SOUP_URI_SCHEME_HTTPS ||
+			      uri->scheme == SOUP_URI_SCHEME_FTP, FALSE);
 
 	return uri->port == soup_scheme_default_port (uri->scheme);
 }
@@ -765,6 +763,22 @@ soup_uri_uses_default_port (SoupURI *uri)
  **/
 
 /**
+ * soup_uri_get_scheme:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's scheme.
+ *
+ * Return value: @uri's scheme.
+ *
+ * Since: 2.32
+ **/
+const char *
+soup_uri_get_scheme (SoupURI *uri)
+{
+	return uri->scheme;
+}
+
+/**
  * soup_uri_set_scheme:
  * @uri: a #SoupURI
  * @scheme: the URI scheme
@@ -775,8 +789,24 @@ soup_uri_uses_default_port (SoupURI *uri)
 void
 soup_uri_set_scheme (SoupURI *uri, const char *scheme)
 {
-	uri->scheme = soup_uri_get_scheme (scheme, strlen (scheme));
+	uri->scheme = soup_uri_parse_scheme (scheme, strlen (scheme));
 	uri->port = soup_scheme_default_port (uri->scheme);
+}
+
+/**
+ * soup_uri_get_user:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's user.
+ *
+ * Return value: @uri's user.
+ *
+ * Since: 2.32
+ **/
+const char *
+soup_uri_get_user (SoupURI *uri)
+{
+	return uri->user;
 }
 
 /**
@@ -794,6 +824,22 @@ soup_uri_set_user (SoupURI *uri, const char *user)
 }
 
 /**
+ * soup_uri_get_password:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's password.
+ *
+ * Return value: @uri's password.
+ *
+ * Since: 2.32
+ **/
+const char *
+soup_uri_get_password (SoupURI *uri)
+{
+	return uri->password;
+}
+
+/**
  * soup_uri_set_password:
  * @uri: a #SoupURI
  * @password: the password, or %NULL
@@ -805,6 +851,22 @@ soup_uri_set_password (SoupURI *uri, const char *password)
 {
 	g_free (uri->password);
 	uri->password = g_strdup (password);
+}
+
+/**
+ * soup_uri_get_host:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's host.
+ *
+ * Return value: @uri's host.
+ *
+ * Since: 2.32
+ **/
+const char *
+soup_uri_get_host (SoupURI *uri)
+{
+	return uri->host;
 }
 
 /**
@@ -826,6 +888,22 @@ soup_uri_set_host (SoupURI *uri, const char *host)
 }
 
 /**
+ * soup_uri_get_port:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's port.
+ *
+ * Return value: @uri's port.
+ *
+ * Since: 2.32
+ **/
+guint
+soup_uri_get_port (SoupURI *uri)
+{
+	return uri->port;
+}
+
+/**
  * soup_uri_set_port:
  * @uri: a #SoupURI
  * @port: the port, or 0
@@ -840,6 +918,22 @@ soup_uri_set_port (SoupURI *uri, guint port)
 }
 
 /**
+ * soup_uri_get_path:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's path.
+ *
+ * Return value: @uri's path.
+ *
+ * Since: 2.32
+ **/
+const char *
+soup_uri_get_path (SoupURI *uri)
+{
+	return uri->path;
+}
+
+/**
  * soup_uri_set_path:
  * @uri: a #SoupURI
  * @path: the path
@@ -851,6 +945,22 @@ soup_uri_set_path (SoupURI *uri, const char *path)
 {
 	g_free (uri->path);
 	uri->path = g_strdup (path);
+}
+
+/**
+ * soup_uri_get_query:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's query.
+ *
+ * Return value: @uri's query.
+ *
+ * Since: 2.32
+ **/
+const char *
+soup_uri_get_query (SoupURI *uri)
+{
+	return uri->query;
 }
 
 /**
@@ -870,7 +980,8 @@ soup_uri_set_query (SoupURI *uri, const char *query)
 /**
  * soup_uri_set_query_from_form:
  * @uri: a #SoupURI
- * @form: a #GHashTable containing HTML form information
+ * @form: (element-type utf8 utf8): a #GHashTable containing HTML form
+ * information
  *
  * Sets @uri's query to the result of encoding @form according to the
  * HTML form rules. See soup_form_encode_hash() for more information.
@@ -879,7 +990,7 @@ void
 soup_uri_set_query_from_form (SoupURI *uri, GHashTable *form)
 {
 	g_free (uri->query);
-	uri->query = soup_form_encode_urlencoded (form);
+	uri->query = soup_form_encode_hash (form);
 }
 
 /**
@@ -904,6 +1015,22 @@ soup_uri_set_query_from_fields (SoupURI    *uri,
 	va_start (args, first_field);
 	uri->query = soup_form_encode_valist (first_field, args);
 	va_end (args);
+}
+
+/**
+ * soup_uri_get_fragment:
+ * @uri: a #SoupURI
+ *
+ * Gets @uri's fragment.
+ *
+ * Return value: @uri's fragment.
+ *
+ * Since: 2.32
+ **/
+const char *
+soup_uri_get_fragment (SoupURI *uri)
+{
+	return uri->fragment;
 }
 
 /**

@@ -29,7 +29,7 @@
  * "removed" ones when walking the queue.
  **/
 
-struct SoupMessageQueue {
+struct _SoupMessageQueue {
 	SoupSession *session;
 
 	GMutex *mutex;
@@ -69,7 +69,19 @@ queue_message_restarted (SoupMessage *msg, gpointer user_data)
 		soup_uri_free (item->proxy_uri);
 		item->proxy_uri = NULL;
 	}
-	item->resolved_proxy_addr = FALSE;
+
+	if (item->conn &&
+	    (!soup_message_is_keepalive (msg) ||
+	     SOUP_STATUS_IS_REDIRECTION (msg->status_code))) {
+		if (soup_connection_get_state (item->conn) == SOUP_CONNECTION_IN_USE)
+			soup_connection_set_state (item->conn, SOUP_CONNECTION_IDLE);
+		g_object_unref (item->conn);
+		item->conn = NULL;
+	}
+
+	g_cancellable_reset (item->cancellable);
+
+	item->state = SOUP_MESSAGE_STARTING;
 }
 
 /**

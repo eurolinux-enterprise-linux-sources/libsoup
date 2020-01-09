@@ -167,8 +167,9 @@ parse_cookie (char *line, time_t now)
 	char **result;
 	SoupCookie *cookie = NULL;
 	gboolean http_only;
-	time_t max_age;
-	char *host, *is_domain, *path, *secure, *expires, *name, *value;
+	gulong expire_time;
+	int max_age;
+	char *host, *path, *secure, *expires, *name, *value;
 
 	if (g_str_has_prefix (line, "#HttpOnly_")) {
 		http_only = TRUE;
@@ -184,12 +185,19 @@ parse_cookie (char *line, time_t now)
 
 	/* Check this first */
 	expires = result[4];
-	max_age = strtoul (expires, NULL, 10) - now;
-	if (max_age <= 0)
+	expire_time = strtoul (expires, NULL, 10);
+	if (now >= expire_time)
 		goto out;
+	max_age = (expire_time - now <= G_MAXINT ? expire_time - now : G_MAXINT);
 
 	host = result[0];
-	is_domain = result[1];
+
+	/* result[1] is not used because it's redundat; it's a boolean
+	 * value regarding whether the cookie should be used for
+	 * sub-domains of the domain that is set for the cookie. It is
+	 * TRUE if host starts with '.', and FALSE otherwise.
+	 */
+
 	path = result[2];
 	secure = result[3];
 
@@ -286,11 +294,11 @@ delete_cookie (const char *filename, SoupCookie *cookie)
 		if (*p == '\r' || *p == '\n') {
 			*p = '\0';
 			c = parse_cookie (line, now);
+			line = p + 1;
 			if (!c)
 				continue;
 			if (!soup_cookie_equal (cookie, c))
 				write_cookie (f, c);
-			line = p + 1;
 			soup_cookie_free (c);
 		}
 	}

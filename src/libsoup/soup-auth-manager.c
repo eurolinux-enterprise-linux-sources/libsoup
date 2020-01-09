@@ -33,6 +33,9 @@ static void request_started  (SoupSessionFeature *feature, SoupSession *session,
 			      SoupMessage *msg, SoupSocket *socket);
 static void request_unqueued  (SoupSessionFeature *feature,
 			       SoupSession *session, SoupMessage *msg);
+static gboolean add_feature (SoupSessionFeature *feature, GType type);
+static gboolean remove_feature (SoupSessionFeature *feature, GType type);
+static gboolean has_feature (SoupSessionFeature *feature, GType type);
 
 enum {
 	AUTHENTICATE,
@@ -139,6 +142,9 @@ soup_auth_manager_session_feature_init (SoupSessionFeatureInterface *feature_int
 	feature_interface->request_queued = request_queued;
 	feature_interface->request_started = request_started;
 	feature_interface->request_unqueued = request_unqueued;
+	feature_interface->add_feature = add_feature;
+	feature_interface->remove_feature = remove_feature;
+	feature_interface->has_feature = has_feature;
 }
 
 static int
@@ -150,36 +156,59 @@ auth_type_compare_func (gconstpointer a, gconstpointer b)
 	return (*auth1)->strength - (*auth2)->strength;
 }
 
-void
-soup_auth_manager_add_type (SoupAuthManager *manager, GType type)
+static gboolean
+add_feature (SoupSessionFeature *feature, GType type)
 {
-	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER_GET_PRIVATE (manager);
+	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER_GET_PRIVATE (feature);
 	SoupAuthClass *auth_class;
 
-	g_return_if_fail (g_type_is_a (type, SOUP_TYPE_AUTH));
+	if (!g_type_is_a (type, SOUP_TYPE_AUTH))
+		return FALSE;
 
 	auth_class = g_type_class_ref (type);
 	g_ptr_array_add (priv->auth_types, auth_class);
 	g_ptr_array_sort (priv->auth_types, auth_type_compare_func);
+	return TRUE;
 }
 
-void
-soup_auth_manager_remove_type (SoupAuthManager *manager, GType type)
+static gboolean
+remove_feature (SoupSessionFeature *feature, GType type)
 {
-	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER_GET_PRIVATE (manager);
+	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER_GET_PRIVATE (feature);
 	SoupAuthClass *auth_class;
 	int i;
 
-	g_return_if_fail (g_type_is_a (type, SOUP_TYPE_AUTH));
+	if (!g_type_is_a (type, SOUP_TYPE_AUTH))
+		return FALSE;
 
 	auth_class = g_type_class_peek (type);
 	for (i = 0; i < priv->auth_types->len; i++) {
 		if (priv->auth_types->pdata[i] == (gpointer)auth_class) {
 			g_ptr_array_remove_index (priv->auth_types, i);
 			g_type_class_unref (auth_class);
-			return;
+			return TRUE;
 		}
 	}
+
+	return FALSE;
+}
+
+static gboolean
+has_feature (SoupSessionFeature *feature, GType type)
+{
+	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER_GET_PRIVATE (feature);
+	SoupAuthClass *auth_class;
+	int i;
+
+	if (!g_type_is_a (type, SOUP_TYPE_AUTH))
+		return FALSE;
+
+	auth_class = g_type_class_peek (type);
+	for (i = 0; i < priv->auth_types->len; i++) {
+		if (priv->auth_types->pdata[i] == (gpointer)auth_class)
+			return TRUE;
+	}
+	return FALSE;
 }
 
 void
@@ -361,9 +390,6 @@ authenticate_auth (SoupAuthManager *manager, SoupAuth *auth,
 	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER_GET_PRIVATE (manager);
 	SoupURI *uri;
 
-	if (soup_auth_is_authenticated (auth))
-		return TRUE;
-
 	if (proxy) {
 		SoupMessageQueue *queue;
 		SoupMessageQueueItem *item;
@@ -381,12 +407,13 @@ authenticate_auth (SoupAuthManager *manager, SoupAuth *auth,
 	} else
 		uri = soup_message_get_uri (msg);
 
-	if (uri->password && !prior_auth_failed) {
-		soup_auth_authenticate (auth, uri->user, uri->password);
-		return TRUE;
-	}
-
-	if (can_interact) {
+	/* If a password is specified explicitly in the URI, use it
+	 * even if the auth had previously already been authenticated.
+	 */
+	if (uri->password) {
+		if (!prior_auth_failed)
+			soup_auth_authenticate (auth, uri->user, uri->password);
+	} else if (!soup_auth_is_authenticated (auth) && can_interact) {
 		soup_auth_manager_emit_authenticate (manager, msg, auth,
 						     prior_auth_failed);
 	}

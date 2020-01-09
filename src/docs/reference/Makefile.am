@@ -13,7 +13,7 @@ DOC_MAIN_SGML_FILE=$(DOC_MODULE)-docs.sgml
 DOC_SOURCE_DIR=../../libsoup
 
 # Extra options to supply to gtkdoc-scan.
-SCAN_OPTIONS=--deprecated-guards=LIBSOUP_DISABLE_DEPRECATED
+SCAN_OPTIONS=--deprecated-guards=LIBSOUP_DISABLE_DEPRECATED --rebuild-types
 
 # Extra options to supply to gtkdoc-scangobj.
 SCANGOBJ_OPTIONS=--type-init-func 'g_type_init(); g_thread_init(NULL)'
@@ -59,10 +59,12 @@ GTKDOC_CFLAGS =				\
 	-I$(top_builddir)		\
 	$(GLIB_CFLAGS)			\
 	$(XML_CFLAGS)			\
-	$(GNUTLS_CFLAGS)		\
-	$(LIBPROXY_LIBS)
+	$(GNUTLS_CFLAGS)
 
-GTKDOC_LIBS = $(top_builddir)/libsoup/libsoup-gnome-2.4.la
+GTKDOC_LIBS =						\
+	$(top_builddir)/libsoup/libsoup-2.4.la		\
+	$(top_builddir)/libsoup/libsoup-gnome-2.4.la	\
+	$(GLIB_LIBS)
 
 # include common portion ...
 include $(top_srcdir)/gtk-doc.make

@@ -79,6 +79,7 @@ static guint signals[LAST_SIGNAL] = { 0 };
 struct SoupClientContext {
 	SoupServer     *server;
 	SoupSocket     *sock;
+	SoupMessage    *msg;
 	SoupAuthDomain *auth_domain;
 	char           *auth_user;
 
@@ -105,7 +106,7 @@ typedef struct {
 	GMainLoop         *loop;
 
 	SoupSocket        *listen_sock;
-	GSList            *client_socks;
+	GSList            *clients;
 
 	gboolean           raw_paths;
 	SoupPathMap       *handlers;
@@ -176,12 +177,19 @@ finalize (GObject *object)
 	if (priv->listen_sock)
 		g_object_unref (priv->listen_sock);
 
-	while (priv->client_socks) {
-		SoupSocket *sock = priv->client_socks->data;
+	while (priv->clients) {
+		SoupClientContext *client = priv->clients->data;
+		SoupSocket *sock = g_object_ref (client->sock);
+
+		priv->clients = g_slist_remove (priv->clients, client);
+
+		if (client->msg) {
+			soup_message_set_status (client->msg, SOUP_STATUS_IO_ERROR);
+			soup_message_io_finished (client->msg);
+		}
 
 		soup_socket_disconnect (sock);
-		priv->client_socks =
-			g_slist_remove (priv->client_socks, sock);
+		g_object_unref (sock);
 	}
 
 	if (priv->default_handler)
@@ -652,7 +660,7 @@ soup_server_is_https (SoupServer *server)
  * read-only; writing to it or modifiying it may cause @server to
  * malfunction.
  *
- * Return value: the listening socket.
+ * Return value: (transfer none): the listening socket.
  **/
 SoupSocket *
 soup_server_get_listener (SoupServer *server)
@@ -690,6 +698,7 @@ soup_client_context_cleanup (SoupClientContext *client)
 		g_free (client->auth_user);
 		client->auth_user = NULL;
 	}
+	client->msg = NULL;
 }
 
 static SoupClientContext *
@@ -709,11 +718,13 @@ soup_client_context_unref (SoupClientContext *client)
 }
 
 static void
-request_finished (SoupMessage *msg, SoupClientContext *client)
+request_finished (SoupMessage *msg, gpointer user_data)
 {
+	SoupClientContext *client = user_data;
 	SoupServer *server = client->server;
 	SoupSocket *sock = client->sock;
 
+	soup_message_finished (msg);
 	g_signal_emit (server,
 		       msg->status_code == SOUP_STATUS_IO_ERROR ?
 		       signals[REQUEST_ABORTED] : signals[REQUEST_FINISHED],
@@ -768,6 +779,15 @@ got_headers (SoupMessage *req, SoupClientContext *client)
 
 		uri = soup_message_get_uri (req);
 		decoded_path = soup_uri_decode (uri->path);
+
+		if (strstr (decoded_path, "/../") ||
+		    g_str_has_suffix (decoded_path, "/..")) {
+			/* Introducing new ".." segments is not allowed */
+			g_free (decoded_path);
+			soup_message_set_status (req, SOUP_STATUS_BAD_REQUEST);
+			return;
+		}
+
 		soup_uri_set_path (uri, decoded_path);
 		g_free (decoded_path);
 	}
@@ -819,6 +839,8 @@ call_handler (SoupMessage *req, SoupClientContext *client)
 	SoupServerHandler *hand;
 	SoupURI *uri;
 
+	g_signal_emit (server, signals[REQUEST_READ], 0, req, client);
+
 	if (req->status_code != 0)
 		return;
 
@@ -833,7 +855,7 @@ call_handler (SoupMessage *req, SoupClientContext *client)
 		GHashTable *form_data_set;
 
 		if (uri->query)
-			form_data_set = soup_form_decode_urlencoded (uri->query);
+			form_data_set = soup_form_decode (uri->query);
 		else
 			form_data_set = NULL;
 
@@ -859,6 +881,8 @@ start_request (SoupServer *server, SoupClientContext *client)
 	msg = g_object_new (SOUP_TYPE_MESSAGE,
 			    SOUP_MESSAGE_SERVER_SIDE, TRUE,
 			    NULL);
+	client->msg = msg;
+
 	if (priv->server_header) {
 		soup_message_headers_append (msg->response_headers, "Server",
 					     priv->server_header);
@@ -866,22 +890,22 @@ start_request (SoupServer *server, SoupClientContext *client)
 
 	g_signal_connect (msg, "got_headers", G_CALLBACK (got_headers), client);
 	g_signal_connect (msg, "got_body", G_CALLBACK (call_handler), client);
-	g_signal_connect (msg, "finished", G_CALLBACK (request_finished), client);
 
 	g_signal_emit (server, signals[REQUEST_STARTED], 0,
 		       msg, client);
 
 	g_object_ref (client->sock);
-	soup_message_read_request (msg, client->sock);
+	soup_message_read_request (msg, client->sock,
+				   request_finished, client);
 }
 
 static void
-socket_disconnected (SoupSocket *sock, SoupServer *server)
+socket_disconnected (SoupSocket *sock, SoupClientContext *client)
 {
-	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (server);
+	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (client->server);
 
-	priv->client_socks = g_slist_remove (priv->client_socks, sock);
-	g_signal_handlers_disconnect_by_func (sock, socket_disconnected, server);
+	priv->clients = g_slist_remove (priv->clients, client);
+	g_signal_handlers_disconnect_by_func (sock, socket_disconnected, client);
 	g_object_unref (sock);
 }
 
@@ -893,9 +917,9 @@ new_connection (SoupSocket *listner, SoupSocket *sock, gpointer user_data)
 	SoupClientContext *client;
 
 	client = soup_client_context_new (server, g_object_ref (sock));
-	priv->client_socks = g_slist_prepend (priv->client_socks, sock);
+	priv->clients = g_slist_prepend (priv->clients, client);
 	g_signal_connect (sock, "disconnected",
-			  G_CALLBACK (socket_disconnected), server);
+			  G_CALLBACK (socket_disconnected), client);
 	start_request (server, client);
 }
 
@@ -987,6 +1011,38 @@ soup_server_quit (SoupServer *server)
 }
 
 /**
+ * soup_server_disconnect:
+ * @server: a #SoupServer
+ *
+ * Stops processing for @server and closes its socket. This implies
+ * the effects of soup_server_quit(), but additionally closes the
+ * listening socket.  Note that messages currently in progress will
+ * continue to be handled, if the main loop associated with the
+ * server is resumed or kept running.
+ *
+ * After calling this function, @server is no longer functional, so it
+ * has nearly the same effect as destroying @server entirely. The
+ * function is thus useful mainly for language bindings without
+ * explicit control over object lifetime.
+ **/
+void
+soup_server_disconnect (SoupServer *server)
+{
+	SoupServerPrivate *priv;
+
+	g_return_if_fail (SOUP_IS_SERVER (server));
+	priv = SOUP_SERVER_GET_PRIVATE (server);
+
+	soup_server_quit (server);
+
+	if (priv->listen_sock) {
+		soup_socket_disconnect (priv->listen_sock);
+		g_object_unref (priv->listen_sock);
+		priv->listen_sock = NULL;
+	}
+}
+
+/**
  * soup_server_get_async_context:
  * @server: a #SoupServer
  *
@@ -994,7 +1050,7 @@ soup_server_quit (SoupServer *server)
  * context, so you will need to ref it yourself if you want it to
  * outlive its server.
  *
- * Return value: @server's #GMainContext, which may be %NULL
+ * Return value: (transfer none): @server's #GMainContext, which may be %NULL
  **/
 GMainContext *
 soup_server_get_async_context (SoupServer *server)
@@ -1051,7 +1107,8 @@ soup_client_context_get_type (void)
  * not get fooled when the allocator reuses the memory address of a
  * previously-destroyed socket to represent a new socket.
  *
- * Return value: the #SoupSocket that @client is associated with.
+ * Return value: (transfer none): the #SoupSocket that @client is
+ * associated with.
  **/
 SoupSocket *
 soup_client_context_get_socket (SoupClientContext *client)
@@ -1068,8 +1125,8 @@ soup_client_context_get_socket (SoupClientContext *client)
  * Retrieves the #SoupAddress associated with the remote end
  * of a connection.
  *
- * Return value: the #SoupAddress associated with the remote end of a
- * connection.
+ * Return value: (transfer none): the #SoupAddress associated with the
+ * remote end of a connection.
  **/
 SoupAddress *
 soup_client_context_get_address (SoupClientContext *client)
@@ -1108,8 +1165,8 @@ soup_client_context_get_host (SoupClientContext *client)
  * authenticated, and if so returns the #SoupAuthDomain that
  * authenticated it.
  *
- * Return value: a #SoupAuthDomain, or %NULL if the request was not
- * authenticated.
+ * Return value: (transfer none) (allow-none): a #SoupAuthDomain, or
+ * %NULL if the request was not authenticated.
  **/
 SoupAuthDomain *
 soup_client_context_get_auth_domain (SoupClientContext *client)
@@ -1143,7 +1200,8 @@ soup_client_context_get_auth_user (SoupClientContext *client)
  * @server: the #SoupServer
  * @msg: the message being processed
  * @path: the path component of @msg's Request-URI
- * @query: the parsed query component of @msg's Request-URI
+ * @query: (element-type utf8 utf8) (allow-none): the parsed query
+ *         component of @msg's Request-URI
  * @client: additional contextual information about the client
  * @user_data: the data passed to @soup_server_add_handler
  *
@@ -1198,7 +1256,7 @@ soup_client_context_get_auth_user (SoupClientContext *client)
 /**
  * soup_server_add_handler:
  * @server: a #SoupServer
- * @path: the toplevel path for the handler
+ * @path: (allow-none): the toplevel path for the handler
  * @callback: callback to invoke for requests under @path
  * @user_data: data for @callback
  * @destroy: destroy notifier to free @user_data

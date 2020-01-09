@@ -69,13 +69,32 @@ authenticate (SoupSession *session, SoupMessage *msg,
 }
 
 static void
-test_url (const char *url, int proxy, guint expected, gboolean sync)
+set_close_on_connect (SoupSession *session, SoupMessage *msg,
+		      SoupSocket *sock, gpointer user_data)
+{
+	/* This is used to test that we can handle the server closing
+	 * the connection when returning a 407 in response to a
+	 * CONNECT. (Rude!)
+	 */
+	if (msg->method == SOUP_METHOD_CONNECT) {
+		soup_message_headers_append (msg->request_headers,
+					     "Connection", "close");
+	}
+}
+
+static void
+test_url (const char *url, int proxy, guint expected,
+	  gboolean sync, gboolean close)
 {
 	SoupSession *session;
 	SoupURI *proxy_uri;
 	SoupMessage *msg;
 
-	debug_printf (1, "  GET %s via %s\n", url, proxy_names[proxy]);
+	if (!tls_available && g_str_has_prefix (url, "https:"))
+		return;
+
+	debug_printf (1, "  GET %s via %s%s\n", url, proxy_names[proxy],
+		      close ? " (with Connection: close)" : "");
 	if (proxy == UNAUTH_PROXY && expected != SOUP_STATUS_FORBIDDEN)
 		expected = SOUP_STATUS_PROXY_UNAUTHORIZED;
 
@@ -89,6 +108,10 @@ test_url (const char *url, int proxy, guint expected, gboolean sync)
 	soup_uri_free (proxy_uri);
 	g_signal_connect (session, "authenticate",
 			  G_CALLBACK (authenticate), NULL);
+	if (close) {
+		g_signal_connect (session, "request-started",
+				  G_CALLBACK (set_close_on_connect), NULL);
+	}
 
 	msg = soup_message_new (SOUP_METHOD_GET, url);
 	if (!msg) {
@@ -105,8 +128,7 @@ test_url (const char *url, int proxy, guint expected, gboolean sync)
 	}
 
 	g_object_unref (msg);
-	soup_session_abort (session);
-	g_object_unref (session);
+	soup_test_session_abort_unref (session);
 }
 
 static void
@@ -124,18 +146,13 @@ run_test (int i, gboolean sync)
 		http_url = g_strconcat (HTTP_SERVER, tests[i].url, NULL);
 		https_url = g_strconcat (HTTPS_SERVER, tests[i].url, NULL);
 	}
-	test_url (http_url, SIMPLE_PROXY, tests[i].final_status, sync);
-#ifdef HAVE_SSL
-	test_url (https_url, SIMPLE_PROXY, tests[i].final_status, sync);
-#endif
-	test_url (http_url, AUTH_PROXY, tests[i].final_status, sync);
-#ifdef HAVE_SSL
-	test_url (https_url, AUTH_PROXY, tests[i].final_status, sync);
-#endif
-	test_url (http_url, UNAUTH_PROXY, tests[i].final_status, sync);
-#ifdef HAVE_SSL
-	test_url (https_url, UNAUTH_PROXY, tests[i].final_status, sync);
-#endif
+	test_url (http_url, SIMPLE_PROXY, tests[i].final_status, sync, FALSE);
+	test_url (https_url, SIMPLE_PROXY, tests[i].final_status, sync, FALSE);
+	test_url (http_url, AUTH_PROXY, tests[i].final_status, sync, FALSE);
+	test_url (https_url, AUTH_PROXY, tests[i].final_status, sync, FALSE);
+	test_url (https_url, AUTH_PROXY, tests[i].final_status, sync, TRUE);
+	test_url (http_url, UNAUTH_PROXY, tests[i].final_status, sync, FALSE);
+	test_url (https_url, UNAUTH_PROXY, tests[i].final_status, sync, FALSE);
 
 	g_free (http_url);
 	g_free (https_url);
@@ -143,9 +160,51 @@ run_test (int i, gboolean sync)
 	debug_printf (1, "\n");
 }
 
+static void
+server_callback (SoupServer *server, SoupMessage *msg,
+		 const char *path, GHashTable *query,
+		 SoupClientContext *context, gpointer data)
+{
+	SoupURI *uri = soup_message_get_uri (msg);
+
+	soup_message_set_status (msg, uri->fragment ? SOUP_STATUS_BAD_REQUEST : SOUP_STATUS_OK);
+}
+
+static void
+do_proxy_fragment_test (SoupURI *base_uri)
+{
+	SoupSession *session;
+	SoupURI *proxy_uri, *req_uri;
+	SoupMessage *msg;
+
+	debug_printf (1, "\nTesting request with fragment via proxy\n");
+
+	proxy_uri = soup_uri_new (proxies[SIMPLE_PROXY]);
+	session = soup_test_session_new (SOUP_TYPE_SESSION_ASYNC,
+					 SOUP_SESSION_PROXY_URI, proxy_uri,
+					 NULL);
+	soup_uri_free (proxy_uri);
+
+	req_uri = soup_uri_new_with_base (base_uri, "/#foo");
+	msg = soup_message_new_from_uri (SOUP_METHOD_GET, req_uri);
+	soup_uri_free (req_uri);
+	soup_session_send_message (session, msg);
+
+	if (!SOUP_STATUS_IS_SUCCESSFUL (msg->status_code)) {
+		debug_printf (1, "  unexpected status %d %s!\n",
+			      msg->status_code, msg->reason_phrase);
+		errors++;
+	}
+
+	g_object_unref (msg);
+	soup_test_session_abort_unref (session);
+}
+
 int
 main (int argc, char **argv)
 {
+	SoupServer *server;
+	SoupURI *base_uri;
 	int i;
 
 	test_init (argc, argv, NULL);
@@ -155,6 +214,16 @@ main (int argc, char **argv)
 		run_test (i, FALSE);
 		run_test (i, TRUE);
 	}
+
+	server = soup_test_server_new (TRUE);
+	soup_server_add_handler (server, NULL, server_callback, NULL, NULL);
+	base_uri = soup_uri_new ("http://127.0.0.1/");
+	soup_uri_set_port (base_uri, soup_server_get_port (server));
+
+	do_proxy_fragment_test (base_uri);
+
+	soup_uri_free (base_uri);
+	soup_test_server_quit_unref (server);
 
 	test_cleanup ();
 	return errors != 0;

@@ -1,0 +1,83 @@
+From 48a69f3cfe8c2f2df76a9ed50522b8b40bc9753a Mon Sep 17 00:00:00 2001
+From: Dan Winship <danw@gnome.org>
+Date: Tue, 1 May 2012 14:35:49 -0400
+Subject: [PATCH] Flip the value of SOUP_MESSAGE_TRUSTED_CERTIFICATE when not
+ using a CA
+
+The value of SOUP_MESSAGE_TRUSTED_CERTIFICATE is not supposed to be
+meaningful if SoupSession:ssl-ca-file is unset, but if someone does
+happen to look at it, "FALSE" probably represents what they were
+looking for better than "TRUE" does.
+---
+ libsoup/soup-socket.c |    7 +++----
+ libsoup/soup-ssl.c    |    4 +++-
+ libsoup/soup-ssl.h    |    3 ++-
+ 3 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/libsoup/soup-socket.c b/libsoup/soup-socket.c
+index 8d11841..6357ba4 100644
+--- a/libsoup/soup-socket.c
++++ b/libsoup/soup-socket.c
+@@ -74,9 +74,9 @@ typedef struct {
+ 	guint non_blocking:1;
+ 	guint is_server:1;
+ 	guint ssl_strict:1;
+-	guint ssl_ca_in_creds:1;
+ 	guint clean_dispose:1;
+ 	gpointer ssl_creds;
++	gboolean ssl_ca_in_creds;
+ 
+ 	GMainContext   *async_context;
+ 	GSource        *watch_src;
+@@ -875,10 +875,9 @@ soup_socket_accept_certificate (GTlsConnection *conn, GTlsCertificate *cert,
+ 	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+ 
+ 	if (soup_ssl_credentials_verify_certificate (priv->ssl_creds,
+-						     cert, errors)) {
+-		priv->ssl_ca_in_creds = TRUE;
++						     cert, errors,
++						     &priv->ssl_ca_in_creds))
+ 		return TRUE;
+-	}
+ 
+ 	return !priv->ssl_strict;
+ }
+diff --git a/libsoup/soup-ssl.c b/libsoup/soup-ssl.c
+index 74d87f2..4f14555 100644
+--- a/libsoup/soup-ssl.c
++++ b/libsoup/soup-ssl.c
+@@ -49,7 +49,8 @@ soup_ssl_get_client_credentials (const char *ca_file)
+ gboolean
+ soup_ssl_credentials_verify_certificate (SoupSSLCredentials   *creds,
+ 					 GTlsCertificate      *cert,
+-					 GTlsCertificateFlags  errors)
++					 GTlsCertificateFlags  errors,
++					 gboolean             *ca_in_creds)
+ {
+ 	errors = errors & creds->validation_flags;
+ 
+@@ -59,6 +60,7 @@ soup_ssl_credentials_verify_certificate (SoupSSLCredentials   *creds,
+ 		for (ca = creds->ca_list; ca; ca = ca->next) {
+ 			if ((g_tls_certificate_verify (cert, NULL, ca->data) & G_TLS_CERTIFICATE_UNKNOWN_CA) == 0) {
+ 				errors &= ~G_TLS_CERTIFICATE_UNKNOWN_CA;
++				*ca_in_creds = TRUE;
+ 				break;
+ 			}
+ 		}
+diff --git a/libsoup/soup-ssl.h b/libsoup/soup-ssl.h
+index 5858199..eac6de6 100644
+--- a/libsoup/soup-ssl.h
++++ b/libsoup/soup-ssl.h
+@@ -19,7 +19,8 @@ SoupSSLCredentials   *soup_ssl_get_client_credentials           (const char
+ void                  soup_ssl_free_client_credentials          (SoupSSLCredentials   *creds);
+ gboolean              soup_ssl_credentials_verify_certificate   (SoupSSLCredentials   *creds,
+ 								 GTlsCertificate      *cert,
+-								 GTlsCertificateFlags  errors);
++								 GTlsCertificateFlags  errors,
++								 gboolean             *ca_in_creds);
+ 
+ SoupSSLCredentials   *soup_ssl_get_server_credentials           (const char           *cert_file,
+ 								 const char           *key_file);
+-- 
+1.7.10
+

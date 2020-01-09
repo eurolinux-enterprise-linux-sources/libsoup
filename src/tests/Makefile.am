@@ -4,11 +4,11 @@ INCLUDES =		\
 	-DLIBSOUP_DISABLE_DEPRECATED \
 	$(SOUP_MAINTAINER_FLAGS) \
 	$(XML_CFLAGS)	\
-	$(GLIB_CFLAGS)	\
-	$(LIBGNUTLS_CFLAGS)
+	$(GLIB_CFLAGS)
 
 LIBS =			\
 	$(top_builddir)/libsoup/libsoup-2.4.la \
+	$(LIBGNUTLS_LIBS) \
 	$(GLIB_LIBS)
 
 noinst_PROGRAMS =	\
@@ -16,6 +16,7 @@ noinst_PROGRAMS =	\
 	coding-test	\
 	context-test	\
 	continue-test	\
+	cookies-test    \
 	date		\
 	dns		\
 	forms-test	\
@@ -32,8 +33,7 @@ noinst_PROGRAMS =	\
 	timeout-test	\
 	uri-parsing	\
 	$(CURL_TESTS)	\
-	$(APACHE_TESTS)	\
-	$(SSL_TESTS)	\
+	$(APACHE_TESTS) \
 	$(XMLRPC_TESTS)
 
 TEST_SRCS = test-utils.c test-utils.h
@@ -43,6 +43,7 @@ chunk_test_SOURCES = chunk-test.c $(TEST_SRCS)
 coding_test_SOURCES = coding-test.c $(TEST_SRCS)
 context_test_SOURCES = context-test.c $(TEST_SRCS)
 continue_test_SOURCES = continue-test.c $(TEST_SRCS)
+cookies_test_SOURCES = cookies-test.c $(TEST_SRCS)
 date_SOURCES = date.c $(TEST_SRCS)
 dns_SOURCES = dns.c
 forms_test_SOURCES = forms-test.c $(TEST_SRCS)
@@ -62,7 +63,6 @@ server_auth_test_SOURCES = server-auth-test.c $(TEST_SRCS)
 simple_httpd_SOURCES = simple-httpd.c
 simple_proxy_SOURCES = simple-proxy.c
 sniffing_test_SOURCES = sniffing-test.c  $(TEST_SRCS)
-ssl_test_SOURCES = ssl-test.c $(TEST_SRCS)
 streaming_test_SOURCES = streaming-test.c $(TEST_SRCS)
 timeout_test_SOURCES = timeout-test.c $(TEST_SRCS)
 uri_parsing_SOURCES = uri-parsing.c $(TEST_SRCS)
@@ -75,9 +75,6 @@ endif
 if HAVE_CURL
 CURL_TESTS = forms-test server-auth-test
 endif
-if HAVE_SSL
-SSL_TESTS = ssl-test
-endif
 if HAVE_XMLRPC_EPI_PHP
 XMLRPC_TESTS = xmlrpc-test xmlrpc-server-test
 endif
@@ -87,6 +84,7 @@ TESTS =			\
 	coding-test	\
 	context-test	\
 	continue-test	\
+	cookies-test	\
 	date		\
 	header-parsing	\
 	misc-test	\
@@ -96,9 +94,8 @@ TESTS =			\
 	streaming-test	\
 	timeout-test	\
 	uri-parsing	\
-	$(APACHE_TESTS)	\
+	$(APACHE_TESTS) \
 	$(CURL_TESTS)	\
-	$(SSL_TESTS)	\
 	$(XMLRPC_TESTS)
 
 SNIFFING_FILES =		\

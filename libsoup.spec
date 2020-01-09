@@ -1,30 +1,26 @@
-%define glib2_version 2.21.3
+%define glib2_version 2.27.90
 
 ### Abstract ###
 
 Name: libsoup
-Version: 2.28.2
-Release: 4%{?dist}
+Version: 2.34.3
+Release: 2%{?dist}
 License: LGPLv2
 Group: Development/Libraries
 Summary: Soup, an HTTP library implementation
 URL: http://live.gnome.org/LibSoup
-BuildRoot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-Source: http://download.gnome.org/sources/libsoup/2.28/libsoup-%{version}.tar.bz2
+#VCS: git:git://git.gnome.org/libsoup
+Source: http://download.gnome.org/sources/libsoup/2.34/libsoup-%{version}.tar.bz2
+Patch1: libsoup-trusted-cert.patch
+Requires: glib-networking >= %{glib2_version}
 
 ### Build Dependencies ###
 
 BuildRequires: glib2-devel >= %{glib2_version}
-BuildRequires: gnutls-devel
+BuildRequires: glib-networking
 BuildRequires: libxml2-devel
-BuildRequires: libproxy-devel
 BuildRequires: sqlite-devel
-BuildRequires: GConf2-devel
 BuildRequires: gnome-keyring-devel
-
-Patch0: libsoup-CVE-2011-2524.patch
-Patch1: libsoup-rh657622.patch
-Patch2: libsoup-rh746587.patch
 
 %description
 Libsoup is an HTTP library implementation in C. It was originally part
@@ -44,7 +40,6 @@ Requires: %{name} = %{version}-%{release}
 Requires: glib2-devel >= %{glib2_version}
 Requires: gnutls-devel
 Requires: libxml2-devel
-Requires: gtk-doc
 
 %description devel
 Libsoup is an HTTP library implementation in C. This package allows
@@ -52,9 +47,8 @@ you to develop applications that use the libsoup library.
 
 %prep
 %setup -q
-%patch0 -p1 -b .dotdot
-%patch1 -p1 -b .rh657622
-%patch2 -p1 -b .rh746587
+
+%patch1 -p1 -b .trust
 
 %build
 %configure
@@ -92,6 +86,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/gtk-doc/html/%{name}-2.4
 
 %changelog
+* Wed Jun 11 2014 Dan Winship <danw@redhat.com> - 2.34.3-2
+- rebase to libsoup 2.34 (via f15 package) (rh#1101399)
+
 * Thu Aug 30 2012 Dan Winship <danw@redhat.com> - 2.28.2-4
 - Fix infinite retry of non-resposive conection (rh#746587)
 

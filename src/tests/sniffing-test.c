@@ -352,8 +352,31 @@ sniffing_content_sniffed (SoupMessage *msg, const char *content_type,
 			  GHashTable *params, gpointer data)
 {
 	char **sniffed_type = (char **)data;
+	GString *full_header;
+	GList *keys;
+	GList *iter;
 
-	*sniffed_type = g_strdup (content_type);
+	if (params == NULL) {
+		*sniffed_type = g_strdup (content_type);
+		return;
+	}
+
+	full_header = g_string_new (content_type);
+	g_string_append (full_header, "; ");
+
+	keys = g_hash_table_get_keys (params);
+	for (iter = keys; iter != NULL; iter = iter->next) {
+		const gchar *value = (const gchar*) g_hash_table_lookup (params, iter->data);
+
+		soup_header_g_string_append_param (full_header,
+						   (const gchar*) iter->data,
+						   value);
+	}
+
+	*sniffed_type = full_header->str;
+
+	g_string_free (full_header, FALSE);
+	g_list_free (keys);
 }
 
 static void
@@ -422,12 +445,32 @@ test_disabled (const char *path)
 	g_main_loop_unref (loop);
 }
 
+/* Fix up XDG_DATA_DIRS for jhbuild runs so that it still works even
+ * if you didn't install shared-mime-info.
+ */
+static void
+fixup_xdg_dirs (void)
+{
+	const char *xdg_data_dirs = g_getenv ("XDG_DATA_DIRS");
+	char *new_data_dirs;
+
+	if (xdg_data_dirs &&
+	    !g_str_has_prefix (xdg_data_dirs, "/usr/share") &&
+	    !strstr (xdg_data_dirs, ":/usr/share")) {
+		new_data_dirs = g_strdup_printf ("%s:/usr/share", xdg_data_dirs);
+		g_setenv ("XDG_DATA_DIRS", new_data_dirs, TRUE);
+		g_free (new_data_dirs);
+	}
+}
+
 int
 main (int argc, char **argv)
 {
 	SoupServer *server;
 
 	test_init (argc, argv, NULL);
+
+	fixup_xdg_dirs ();
 
 	server = soup_test_server_new (TRUE);
 	soup_server_add_handler (server, NULL, server_callback, NULL, NULL);
@@ -516,6 +559,9 @@ main (int argc, char **argv)
 
 	test_sniffing ("/multiple_headers/home.gif", "image/gif");
 
+	/* Test that we keep the parameters when sniffing */
+	test_sniffing ("/type/text_html; charset=UTF-8/test.html", "text/html; charset=UTF-8");
+
 	/* Test that disabling the sniffer works correctly */
 
 	test_disabled ("/text_or_binary/home.gif");
@@ -523,6 +569,7 @@ main (int argc, char **argv)
 	soup_uri_free (base_uri);
 
 	soup_test_session_abort_unref (session);
+	soup_test_server_quit_unref (server);
 	test_cleanup ();
 	return errors != 0;
 }

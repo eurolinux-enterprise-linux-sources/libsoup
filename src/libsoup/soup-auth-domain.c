@@ -72,7 +72,7 @@ typedef struct {
 
 #define SOUP_AUTH_DOMAIN_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SOUP_TYPE_AUTH_DOMAIN, SoupAuthDomainPrivate))
 
-G_DEFINE_TYPE (SoupAuthDomain, soup_auth_domain, G_TYPE_OBJECT)
+G_DEFINE_ABSTRACT_TYPE (SoupAuthDomain, soup_auth_domain, G_TYPE_OBJECT)
 
 static void set_property (GObject *object, guint prop_id,
 			  const GValue *value, GParamSpec *pspec);
@@ -553,9 +553,11 @@ soup_auth_domain_covers (SoupAuthDomain *domain, SoupMessage *msg)
 	SoupAuthDomainPrivate *priv = SOUP_AUTH_DOMAIN_GET_PRIVATE (domain);
 	const char *path;
 
-	path = soup_message_get_uri (msg)->path;
-	if (!soup_path_map_lookup (priv->paths, path))
-		return FALSE;
+	if (!priv->proxy) {
+		path = soup_message_get_uri (msg)->path;
+		if (!soup_path_map_lookup (priv->paths, path))
+			return FALSE;
+	}
 
 	if (priv->filter && !priv->filter (domain, msg, priv->filter_data))
 		return FALSE;
