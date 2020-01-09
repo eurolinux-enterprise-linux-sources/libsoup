@@ -4,7 +4,7 @@
 
 Name: libsoup
 Version: 2.34.3
-Release: 3%{?dist}
+Release: 5%{?dist}
 License: LGPLv2
 Group: Development/Libraries
 Summary: Soup, an HTTP library implementation
@@ -13,6 +13,8 @@ URL: http://live.gnome.org/LibSoup
 Source: http://download.gnome.org/sources/libsoup/2.34/libsoup-%{version}.tar.bz2
 Patch1: libsoup-trusted-cert.patch
 Patch2: libsoup-not-ssl3.patch
+Patch3: libsoup-sync-connect.patch
+Patch4: libsoup-not-emit-readable.patch
 Requires: glib-networking >= %{glib2_version}
 
 ### Build Dependencies ###
@@ -51,6 +53,8 @@ you to develop applications that use the libsoup library.
 
 %patch1 -p1 -b .trust
 %patch2 -p1 -b .not-ssl3
+%patch3 -p1 -b .sync-connect
+%patch4 -p1 -b .not-emit-readable
 
 %build
 %configure
@@ -88,6 +92,12 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/gtk-doc/html/%{name}-2.4
 
 %changelog
+* Thu Nov 12 2015 Milan Crha <mcrha@redhat.com> - 2.34.3-5
+- Fix a crash of 'readable' emit on disconnect for blocking sockets (rh#1009104)
+
+* Mon Oct 26 2015 Dan Winship <danw@redhat.com> - 2.34.3-4
+- Fix a crash when cancelling a synchronous connect (rh#969859)
+
 * Mon Jan  5 2015  <danw@redhat.com> - 2.34.3-3
 - Fix TLS negotiation; don't default to SSLv3 (rh#975457)
 

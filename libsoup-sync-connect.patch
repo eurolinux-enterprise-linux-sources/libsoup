@@ -1,0 +1,31 @@
+diff -up libsoup-2.34.3/libsoup/soup-socket.c.ref libsoup-2.34.3/libsoup/soup-socket.c
+--- libsoup-2.34.3/libsoup/soup-socket.c.ref	2015-10-26 16:22:58.943708473 -0400
++++ libsoup-2.34.3/libsoup/soup-socket.c	2015-10-26 16:23:53.592658708 -0400
+@@ -703,6 +703,7 @@ soup_socket_connect_sync (SoupSocket *so
+ 	GSocketClient *client;
+ 	GSocketConnection *conn;
+ 	GError *error = NULL;
++	guint status;
+ 
+ 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), SOUP_STATUS_MALFORMED);
+ 	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+@@ -710,6 +711,8 @@ soup_socket_connect_sync (SoupSocket *so
+ 	g_return_val_if_fail (priv->gsock == NULL, SOUP_STATUS_MALFORMED);
+ 	g_return_val_if_fail (priv->remote_addr != NULL, SOUP_STATUS_MALFORMED);
+ 
++	g_object_ref (sock);
++
+ 	if (cancellable)
+ 		g_object_ref (cancellable);
+ 	else
+@@ -724,7 +727,9 @@ soup_socket_connect_sync (SoupSocket *so
+ 					priv->connect_cancel, &error);
+ 	g_object_unref (client);
+ 
+-	return socket_connected (sock, conn, error);
++	status = socket_connected (sock, conn, error);
++	g_object_unref (sock);
++	return status;
+ }
+ 
+ int

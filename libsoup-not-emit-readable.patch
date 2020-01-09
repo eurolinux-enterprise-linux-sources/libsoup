@@ -1,0 +1,29 @@
+From ae6bc194cb4c0a1c3e2cee64b4df2a07aa666542 Mon Sep 17 00:00:00 2001
+From: Dan Winship <danw@gnome.org>
+Date: Thu, 19 Jul 2012 08:49:55 -0400
+Subject: SoupSocket: don't emit "readable" on disconnect for blocking sockets
+
+"readable" and "writable" are only supposed to be emitted for
+non-blocking sockets, but we were emitting "readable" on disconnect
+for all sockets.
+
+This could cause a crash if a message in a SoupSessionSync failed at
+certain points, since the code wasn't expecting to end up in
+io_read().
+
+diff -up libsoup-2.34.3/libsoup/soup-socket.c.not-emit-readable libsoup-2.34.3/libsoup/soup-socket.c
+--- libsoup-2.34.3/libsoup/soup-socket.c.not-emit-readable	2015-11-12 18:12:31.108970904 +0100
++++ libsoup-2.34.3/libsoup/soup-socket.c	2015-11-12 18:12:31.109970904 +0100
+@@ -1037,8 +1037,10 @@ soup_socket_disconnect (SoupSocket *sock
+ 	 */
+ 	g_object_ref (sock);
+ 
+-	/* Give all readers a chance to notice the connection close */
+-	g_signal_emit (sock, signals[READABLE], 0);
++	if (priv->non_blocking) {
++		/* Give all readers a chance to notice the connection close */
++		g_signal_emit (sock, signals[READABLE], 0);
++	}
+ 
+ 	/* FIXME: can't disconnect until all data is read */
+ 
