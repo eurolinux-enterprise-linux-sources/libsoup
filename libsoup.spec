@@ -4,7 +4,7 @@
 
 Name: libsoup
 Version: 2.34.3
-Release: 2%{?dist}
+Release: 3%{?dist}
 License: LGPLv2
 Group: Development/Libraries
 Summary: Soup, an HTTP library implementation
@@ -12,6 +12,7 @@ URL: http://live.gnome.org/LibSoup
 #VCS: git:git://git.gnome.org/libsoup
 Source: http://download.gnome.org/sources/libsoup/2.34/libsoup-%{version}.tar.bz2
 Patch1: libsoup-trusted-cert.patch
+Patch2: libsoup-not-ssl3.patch
 Requires: glib-networking >= %{glib2_version}
 
 ### Build Dependencies ###
@@ -49,6 +50,7 @@ you to develop applications that use the libsoup library.
 %setup -q
 
 %patch1 -p1 -b .trust
+%patch2 -p1 -b .not-ssl3
 
 %build
 %configure
@@ -86,6 +88,9 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/gtk-doc/html/%{name}-2.4
 
 %changelog
+* Mon Jan  5 2015  <danw@redhat.com> - 2.34.3-3
+- Fix TLS negotiation; don't default to SSLv3 (rh#975457)
+
 * Wed Jun 11 2014 Dan Winship <danw@redhat.com> - 2.34.3-2
 - rebase to libsoup 2.34 (via f15 package) (rh#1101399)
 

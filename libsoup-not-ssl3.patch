@@ -1,0 +1,11 @@
+diff -up libsoup-2.34.3/libsoup/soup-socket.c.tls libsoup-2.34.3/libsoup/soup-socket.c
+--- libsoup-2.34.3/libsoup/soup-socket.c.tls	2015-01-05 08:46:16.733918802 -0500
++++ libsoup-2.34.3/libsoup/soup-socket.c	2015-01-05 08:46:21.004950450 -0500
+@@ -933,7 +933,6 @@ soup_socket_start_proxy_ssl (SoupSocket
+ 				       "server-identity", identity,
+ 				       "use-system-certdb", FALSE,
+ 				       "require-close-notify", FALSE,
+-				       "use-ssl3", TRUE,
+ 				       NULL);
+ 		g_object_unref (identity);
+ 
