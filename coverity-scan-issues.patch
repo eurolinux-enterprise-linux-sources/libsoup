@@ -1,0 +1,74 @@
+diff --git a/libsoup/soup-auth-basic.c b/libsoup/soup-auth-basic.c
+index 5f1e718..d8b3226 100644
+--- a/libsoup/soup-auth-basic.c
++++ b/libsoup/soup-auth-basic.c
+@@ -74,7 +74,7 @@ soup_auth_basic_get_protection_space (SoupAuth *auth, SoupURI *source_uri)
+ 
+ 	/* Strip filename component */
+ 	p = strrchr (space, '/');
+-	if (p == space && p[1])
++	if (p && p == space && p[1])
+ 		p[1] = '\0';
+ 	else if (p && p[1])
+ 		*p = '\0';
+diff --git a/libsoup/soup-auth-negotiate.c b/libsoup/soup-auth-negotiate.c
+index 94863d6..f94760c 100644
+--- a/libsoup/soup-auth-negotiate.c
++++ b/libsoup/soup-auth-negotiate.c
+@@ -268,7 +268,7 @@ soup_auth_negotiate_update_connection (SoupConnectionAuth *auth, SoupMessage *ms
+ 		} else {
+ 			/* FIXME: report further upward via
+ 			 * soup_message_get_error_message  */
+-			g_warning ("gssapi step failed: %s", err->message);
++			g_warning ("gssapi step failed: %s", err ? err->message : "Unknown error");
+ 			success = FALSE;
+ 		}
+ 	} else if (!strncmp (header, "Negotiate ", 10)) {
+diff --git a/libsoup/soup-message-headers.c b/libsoup/soup-message-headers.c
+index a180c6e..abef34c 100644
+--- a/libsoup/soup-message-headers.c
++++ b/libsoup/soup-message-headers.c
+@@ -1324,7 +1324,7 @@ content_type_setter (SoupMessageHeaders *hdrs, const char *value)
+ {
+ 	g_free (hdrs->content_type);
+ 	if (value) {
+-		char *content_type, *p;
++		char *content_type = NULL, *p;
+ 
+ 		parse_content_foo (hdrs, "Content-Type", &content_type, NULL);
+ 		p = strpbrk (content_type, " /");
+diff --git a/libsoup/soup-xmlrpc.c b/libsoup/soup-xmlrpc.c
+index 42dcda9..2da6344 100644
+--- a/libsoup/soup-xmlrpc.c
++++ b/libsoup/soup-xmlrpc.c
+@@ -588,7 +588,7 @@ signature_get_next_complete_type (const char **signature)
+ 
+ 			(*signature)++;
+ 
+-			if ( (*signature)[0] == stack[stack_len - 1])
++			if ( stack_len > 0 && (*signature)[0] == stack[stack_len - 1])
+ 				stack_len--;
+ 		} while (stack_len > 0);
+ 
+diff --git a/tests/test-utils.c b/tests/test-utils.c
+index 9c74206..fc58362 100644
+--- a/tests/test-utils.c
++++ b/tests/test-utils.c
+@@ -676,6 +678,8 @@ soup_test_request_read_all (SoupRequest   *req,
+ 
+ 	if (!SOUP_IS_SESSION_SYNC (soup_request_get_session (req)))
+ 		data.loop = g_main_loop_new (g_main_context_get_thread_default (), FALSE);
++	else
++		data.loop = NULL;
+ 
+ 	do {
+ 		if (SOUP_IS_SESSION_SYNC (soup_request_get_session (req))) {
+@@ -691,7 +695,7 @@ soup_test_request_read_all (SoupRequest   *req,
+ 		}
+ 	} while (nread > 0);
+ 
+-	if (!SOUP_IS_SESSION_SYNC (soup_request_get_session (req)))
++	if (data.loop)
+ 		g_main_loop_unref (data.loop);
+ 
+ 	return nread == 0;

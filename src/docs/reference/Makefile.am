@@ -29,9 +29,9 @@ HFILE_GLOB=
 CFILE_GLOB=
 
 # Header files to ignore when scanning.
-IGNORE_HFILES= soup.h soup-enum-types.h \
+IGNORE_HFILES= soup.h soup-autocleanups.h soup-enum-types.h \
 	soup-message-private.h soup-session-private.h \
-	soup-auth-basic.h soup-auth-digest.h soup-auth-ntlm.h \
+	soup-auth-basic.h soup-auth-digest.h soup-auth-ntlm.h soup-auth-negotiate.h \
 	soup-connection.h soup-connection-auth.h \
 	soup-message-queue.h soup-path-map.h soup-gnome-features.h \
 	soup-proxy-resolver.h soup-proxy-resolver-gnome.h \
@@ -45,7 +45,8 @@ IGNORE_HFILES= soup.h soup-enum-types.h \
 	soup-cookie-jar-sqlite.h soup-requester.h soup-tld-private.h \
 	soup-misc-private.h soup-proxy-uri-resolver.h \
 	soup-proxy-resolver-wrapper.h soup-proxy-uri-resolver.h \
-	soup-cache-private.h soup-socket-private.h
+	soup-cache-private.h soup-cache-client-input-stream.h \
+	soup-socket-private.h soup-value-utils.h soup-xmlrpc-old.h
 
 # Images to copy into HTML directory.
 HTML_IMAGES = 

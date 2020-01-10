@@ -1,32 +1,33 @@
-%define glib2_version 2.42.0
-
-### Abstract ###
+%define glib2_version 2.38.0
 
 Name: libsoup
-Version: 2.48.1
-Release: 6%{?dist}
-License: LGPLv2
-Group: Development/Libraries
+Version: 2.56.0
+Release: 3%{?dist}
 Summary: Soup, an HTTP library implementation
-URL: http://live.gnome.org/LibSoup
-#VCS: git:git://git.gnome.org/libsoup
-Source: http://download.gnome.org/sources/libsoup/2.48/libsoup-%{version}.tar.xz
-Patch1: rh1088458-ntlm-fix.patch
-Patch2: rh1224989-make-check.patch
-Patch3: rh1304238-ja-translation.patch
-Patch4: rh1302366-nul-in-headers.patch
-Patch5: rh1328453-ntlm-auth-failure.patch
 
-Requires: glib-networking >= %{glib2_version}
+License: LGPLv2
+URL: https://wiki.gnome.org/Projects/libsoup
+Source0: https://download.gnome.org/sources/%{name}/2.56/%{name}-%{version}.tar.xz
 
-### Build Dependencies ###
+Patch01: coverity-scan-issues.patch
+# https://bugzilla.redhat.com/show_bug.cgi?id=1439798
+# https://bugzilla.gnome.org/show_bug.cgi?id=782939
+Patch02: get-leaks.patch
+# https://bugzilla.gnome.org/show_bug.cgi?id=782940
+Patch03: negotiate-internals.patch
+# https://bugzilla.gnome.org/show_bug.cgi?id=783780
+Patch04: negotiate-connection-close.patch
+# https://bugzilla.gnome.org/show_bug.cgi?id=783781
+Patch05: tcms-site-warning.patch
 
 BuildRequires: glib2-devel >= %{glib2_version}
 BuildRequires: glib-networking
-BuildRequires: gobject-introspection-devel
 BuildRequires: intltool
-BuildRequires: libxml2-devel
-BuildRequires: sqlite-devel
+BuildRequires: krb5-devel >= 1.11
+BuildRequires: pkgconfig(gobject-introspection-1.0)
+BuildRequires: pkgconfig(libxml-2.0)
+BuildRequires: pkgconfig(sqlite3)
+BuildRequires: vala
 
 Requires: glib2%{?_isa} >= %{glib2_version}
 Requires: glib-networking%{?_isa} >= %{glib2_version}
@@ -44,7 +45,6 @@ supported for those who want it).
 
 %package devel
 Summary: Header files for the Soup library
-Group: Development/Libraries
 Requires: %{name}%{?_isa} = %{version}-%{release}
 
 %description devel
@@ -53,11 +53,11 @@ you to develop applications that use the libsoup library.
 
 %prep
 %setup -q
-%patch1 -p1 -b .ntlm-fix
-%patch2 -p1 -b .check
-%patch3 -p1 -b .ja-translation
-%patch4 -p1 -b .nul-in-headers
-%patch5 -p1 -b .ntlm-auth-failure
+%patch01 -p1 -b .coverity-scan-issues
+%patch02 -p1 -b .get-leaks
+%patch03 -p1 -b .negotiate-internals
+%patch04 -p1 -b .negotiate-connection-close
+%patch05 -p1 -b .tcms-site-warning
 
 %build
 %configure --disable-static
@@ -68,7 +68,7 @@ sed --in-place --expression 's! -shared ! -Wl,--as-needed\0!g' libtool
 make %{?_smp_mflags}
 
 %install
-make DESTDIR=$RPM_BUILD_ROOT install
+%make_install
 
 rm -f $RPM_BUILD_ROOT/%{_libdir}/*.la
 
@@ -79,7 +79,8 @@ rm -f $RPM_BUILD_ROOT/%{_libdir}/*.la
 %postun -p /sbin/ldconfig
 
 %files -f libsoup.lang
-%doc README COPYING NEWS AUTHORS
+%license COPYING
+%doc README NEWS AUTHORS
 %{_libdir}/lib*.so.*
 %{_libdir}/girepository-1.0/Soup*2.4.typelib
 
@@ -90,8 +91,22 @@ rm -f $RPM_BUILD_ROOT/%{_libdir}/*.la
 %{_libdir}/pkgconfig/*.pc
 %{_datadir}/gir-1.0/Soup*2.4.gir
 %{_datadir}/gtk-doc/html/%{name}-2.4
+%dir %{_datadir}/vala
+%dir %{_datadir}/vala/vapi
+%{_datadir}/vala/vapi/libsoup-2.4.deps
+%{_datadir}/vala/vapi/libsoup-2.4.vapi
 
 %changelog
+* Thu Jun 22 2017 Tomas Popela <tpopela@redhat.com> - 2.56.0-3
+- libsoup stuck on infinite loop for kerberized pages (rh #1439798)
+
+* Wed Apr 26 2017 Milan Crha <mcrha@redhat.com> - 2.56.0-2
+- Add patch to address some of Coverity Scan and clang reported issues
+
+* Mon Sep 19 2016 Kalev Lember <klember@redhat.com> - 2.56.0-1
+- Update to 2.56.0
+- Resolves: #1387019
+
 * Tue Apr 19 2016 Milan Crha <mcrha@redhat.com> - 2.48.1-6
 - NTLM auth failure with latest samba (rh #1328453)
 

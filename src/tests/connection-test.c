@@ -54,15 +54,18 @@ timeout_request_started (SoupServer *server, SoupMessage *msg,
 	GMainContext *context = g_main_context_get_thread_default ();
 	guint readable;
 
+	g_signal_handlers_disconnect_by_func (server, timeout_request_started, NULL);
+
 	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
 	sock = soup_client_context_get_socket (client);
 	G_GNUC_END_IGNORE_DEPRECATIONS;
 	readable = g_signal_connect (sock, "readable",
 				    G_CALLBACK (timeout_socket), NULL);
+
+	g_mutex_unlock (&server_mutex);
 	while (soup_socket_is_connected (sock))
 		g_main_context_iteration (context, TRUE);
 	g_signal_handler_disconnect (sock, readable);
-	g_signal_handlers_disconnect_by_func (server, timeout_request_started, NULL);
 }
 
 static void
@@ -80,17 +83,18 @@ setup_timeout_persistent (SoupServer *server, SoupSocket *sock)
 	 *      fail (since the client is waiting for us to
 	 *      return a response). This will cause it to
 	 *      emit "readable" later.
-	 *   2. Connect to the server's request-started signal.
-	 *   3. Run an inner main loop from that signal handler
-	 *      until the socket emits "readable". (If we don't
-	 *      do this then it's possible the client's next
-	 *      request would be ready before we returned to
-	 *      the main loop, and so the signal would never be
-	 *      emitted.)
+	 *   2. Wait for the server to finish this request and
+	 *      start reading the next one (and lock server_mutex
+	 *      to interlock with the client and ensure that it
+	 *      doesn't start writing its next request until
+	 *      that point).
+	 *   3. Block until "readable" is emitted, meaning the
+	 *      client has written its request.
 	 *   4. Close the socket.
 	 */
 
 	soup_socket_read (sock, buf, 1, &nread, NULL, NULL);
+	g_mutex_lock (&server_mutex);
 	g_signal_connect (server, "request-started",
 			  G_CALLBACK (timeout_request_started), NULL);
 }
@@ -256,6 +260,12 @@ do_timeout_test_for_session (SoupSession *session)
 	}
 	g_object_unref (msg);
 
+	/* The server will grab server_mutex before returning the response,
+	 * and release it when it's ready for us to send the second request.
+	 */
+	g_mutex_lock (&server_mutex);
+	g_mutex_unlock (&server_mutex);
+
 	debug_printf (1, "    Second message\n");
 	msg = soup_message_new_from_uri ("GET", base_uri);
 	soup_session_send_message (session, msg);
@@ -319,6 +329,12 @@ do_timeout_req_test_for_session (SoupSession *session)
 		sockets[1] = sockets[2] = sockets[3] = NULL;
 	}
 	g_object_unref (req);
+
+	/* The server will grab server_mutex before returning the response,
+	 * and release it when it's ready for us to send the second request.
+	 */
+	g_mutex_lock (&server_mutex);
+	g_mutex_unlock (&server_mutex);
 
 	debug_printf (1, "    Second request\n");
 	req = soup_session_request_uri (session, base_uri, NULL);
@@ -388,7 +404,7 @@ static GMainLoop *max_conns_loop;
 static int msgs_done;
 static guint quit_loop_timeout;
 #define MAX_CONNS 2
-#define TEST_CONNS (MAX_CONNS * 2)
+#define TEST_CONNS (MAX_CONNS * 2) + 1
 
 static gboolean
 idle_start_server (gpointer data)
@@ -409,7 +425,7 @@ static void
 max_conns_request_started (SoupSession *session, SoupMessage *msg,
 			   SoupSocket *socket, gpointer user_data)
 {
-	if (++msgs_done == MAX_CONNS) {
+	if (++msgs_done >= MAX_CONNS) {
 		if (quit_loop_timeout)
 			g_source_remove (quit_loop_timeout);
 		quit_loop_timeout = g_timeout_add (100, quit_loop, NULL);
@@ -426,7 +442,8 @@ max_conns_message_complete (SoupSession *session, SoupMessage *msg, gpointer use
 static void
 do_max_conns_test_for_session (SoupSession *session)
 {
-	SoupMessage *msgs[TEST_CONNS];
+	SoupMessage *msgs[TEST_CONNS + 1];
+	SoupMessageFlags flags;
 	int i;
 
 	max_conns_loop = g_main_loop_new (NULL, TRUE);
@@ -436,7 +453,7 @@ do_max_conns_test_for_session (SoupSession *session)
 	g_signal_connect (session, "request-started",
 			  G_CALLBACK (max_conns_request_started), NULL);
 	msgs_done = 0;
-	for (i = 0; i < TEST_CONNS; i++) {
+	for (i = 0; i < TEST_CONNS - 1; i++) {
 		msgs[i] = soup_message_new_from_uri ("GET", base_uri);
 		g_object_ref (msgs[i]);
 		soup_session_queue_message (session, msgs[i],
@@ -445,6 +462,21 @@ do_max_conns_test_for_session (SoupSession *session)
 
 	g_main_loop_run (max_conns_loop);
 	g_assert_cmpint (msgs_done, ==, MAX_CONNS);
+
+	if (quit_loop_timeout)
+		g_source_remove (quit_loop_timeout);
+	quit_loop_timeout = g_timeout_add (1000, quit_loop, NULL);
+
+	/* Message with SOUP_MESSAGE_IGNORE_CONNECTION_LIMITS should start */
+	msgs[i] = soup_message_new_from_uri ("GET", base_uri);
+	flags = soup_message_get_flags (msgs[i]);
+	soup_message_set_flags (msgs[i], flags | SOUP_MESSAGE_IGNORE_CONNECTION_LIMITS);
+	g_object_ref (msgs[i]);
+	soup_session_queue_message (session, msgs[i],
+				    max_conns_message_complete, NULL);
+
+	g_main_loop_run (max_conns_loop);
+	g_assert_cmpint (msgs_done, ==, MAX_CONNS + 1);
 	g_signal_handlers_disconnect_by_func (session, max_conns_request_started, NULL);
 
 	msgs_done = 0;

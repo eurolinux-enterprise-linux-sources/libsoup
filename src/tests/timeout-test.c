@@ -54,8 +54,8 @@ do_msg_tests_for_session (SoupSession *timeout_session,
 			  SoupURI *fast_uri,
 			  SoupURI *slow_uri)
 {
-	SoupSocket *ret, *idle_first, *idle_second;
-	SoupSocket *plain_first, *plain_second;
+	SoupSocket *ret, *idle_first = NULL, *idle_second;
+	SoupSocket *plain_first = NULL, *plain_second;
 
 	if (idle_session) {
 		g_signal_connect (idle_session, "request-started",
@@ -152,8 +152,8 @@ do_req_tests_for_session (SoupSession *timeout_session,
 			  SoupURI *fast_uri,
 			  SoupURI *slow_uri)
 {
-	SoupSocket *ret, *idle_first, *idle_second;
-	SoupSocket *plain_first, *plain_second;
+	SoupSocket *ret, *idle_first = NULL, *idle_second;
+	SoupSocket *plain_first = NULL, *plain_second;
 
 	if (idle_session) {
 		g_signal_connect (idle_session, "request-started",
@@ -265,6 +265,8 @@ do_sync_timeout_tests (gconstpointer data)
 	do_req_tests_for_session (timeout_session, NULL, plain_session, fast_uri, slow_uri);
 	soup_test_session_abort_unref (timeout_session);
 	soup_test_session_abort_unref (plain_session);
+
+	soup_uri_free (slow_uri);
 }
 
 static gboolean

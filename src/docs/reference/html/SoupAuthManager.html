@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>libsoup Reference Manual: SoupAuthManager</title>
+<title>SoupAuthManager: libsoup Reference Manual</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch03.html" title="Additional Features">
 <link rel="prev" href="SoupSessionFeature.html" title="SoupSessionFeature">
 <link rel="next" href="SoupContentDecoder.html" title="SoupContentDecoder">
-<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -87,7 +87,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupAuthManager.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="http://library.gnome.org/devel/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
     <span class="lineart">╰──</span> SoupAuthManager
 </pre>
 </div>
@@ -118,14 +118,14 @@ individual requests with <a class="link" href="SoupMessage.html#soup-message-dis
 <a name="SOUP-TYPE-AUTH-MANAGER:CAPS"></a><h3>SOUP_TYPE_AUTH_MANAGER</h3>
 <pre class="programlisting">#define SOUP_TYPE_AUTH_MANAGER            (soup_auth_manager_get_type ())
 </pre>
-<p>The <a href="http://library.gnome.org/devel/gobject/unstable/gobject-Type-Information.html#GType"><span class="type">GType</span></a> of <a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a>; you can use this with
+<p>The <a href="https://developer.gnome.org/gobject/unstable/gobject-Type-Information.html#GType"><span class="type">GType</span></a> of <a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a>; you can use this with
 <a class="link" href="SoupSession.html#soup-session-remove-feature-by-type" title="soup_session_remove_feature_by_type ()"><code class="function">soup_session_remove_feature_by_type()</code></a> or
 <a class="link" href="SoupMessage.html#soup-message-disable-feature" title="soup_message_disable_feature ()"><code class="function">soup_message_disable_feature()</code></a>.</p>
 <p>(Although this type has only been publicly visible since libsoup
 2.42, it has always existed in the background, and you can use
 <code class="literal"><code class="code">g_type_from_name ("SoupAuthManager")</code></code>
-to get its <a href="http://library.gnome.org/devel/gobject/unstable/gobject-Type-Information.html#GType"><span class="type">GType</span></a> in earlier releases.)</p>
-<p class="since">Since 2.42</p>
+to get its <a href="https://developer.gnome.org/gobject/unstable/gobject-Type-Information.html#GType"><span class="type">GType</span></a> in earlier releases.)</p>
+<p class="since">Since: 2.42</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -173,7 +173,7 @@ is to be used</p></td>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.42</p>
+<p class="since">Since: 2.42</p>
 </div>
 </div>
 <div class="refsect1">
@@ -181,8 +181,6 @@ is to be used</p></td>
 <div class="refsect2">
 <a name="SoupAuthManager-struct"></a><h3>SoupAuthManager</h3>
 <pre class="programlisting">typedef struct _SoupAuthManager SoupAuthManager;</pre>
-<p>
-</p>
 </div>
 </div>
 <div class="refsect1">
@@ -193,8 +191,8 @@ is to be used</p></td>
 user_function (<a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a> *manager,
                <a class="link" href="SoupMessage.html" title="SoupMessage"><span class="type">SoupMessage</span></a>     *msg,
                <a class="link" href="SoupAuth.html" title="SoupAuth"><span class="type">SoupAuth</span></a>        *auth,
-               <span class="type">gboolean</span>         retrying,
-               <span class="type">gpointer</span>         user_data)</pre>
+               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>         retrying,
+               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>         user_data)</pre>
 <p>Emitted when the manager requires the application to
 provide authentication credentials.</p>
 <p><a class="link" href="SoupSession.html" title="SoupSession"><span class="type">SoupSession</span></a> connects to this signal and emits its own
@@ -226,7 +224,7 @@ you shouldn't need to use this signal directly.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>retrying</p></td>
-<td class="parameter_description"><p><code class="literal">TRUE</code> if this is the second (or later) attempt</p></td>
+<td class="parameter_description"><p><a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if this is the second (or later) attempt</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -246,7 +244,6 @@ you shouldn't need to use this signal directly.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21</div>
+<hr>Generated by GTK-Doc V1.24</div>
 </body>
 </html>

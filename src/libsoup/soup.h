@@ -10,6 +10,8 @@
 extern "C" {
 #endif
 
+#define __SOUP_H_INSIDE__
+
 #include <libsoup/soup-address.h>
 #include <libsoup/soup-auth.h>
 #include <libsoup/soup-auth-domain.h>
@@ -50,7 +52,14 @@ extern "C" {
 #include <libsoup/soup-uri.h>
 #include <libsoup/soup-value-utils.h>
 #include <libsoup/soup-version.h>
+#include <libsoup/soup-websocket.h>
+#include <libsoup/soup-websocket-connection.h>
 #include <libsoup/soup-xmlrpc.h>
+#include <libsoup/soup-xmlrpc-old.h>
+
+#include <libsoup/soup-autocleanups.h>
+
+#undef __SOUP_H_INSIDE__
 
 #ifdef __cplusplus
 }

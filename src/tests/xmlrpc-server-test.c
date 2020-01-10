@@ -1,196 +1,194 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: t; c-basic-offset: 8 -*- */
 /*
- * Copyright (C) 2008 Red Hat, Inc.
+ * Copyright 2008 Red Hat, Inc.
+ * Copyright 2015, Collabora ltd.
  */
 
 #include "test-utils.h"
 
 static char *uri;
 
-#ifdef G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-#endif
-
-static void
-type_error (SoupMessage *msg, GType expected, GValueArray *params, int bad_value)
+static GVariant *
+parse_params (SoupMessage *msg, SoupXMLRPCParams *params, const char *signature)
 {
-	soup_xmlrpc_set_fault (msg,
-			       SOUP_XMLRPC_FAULT_SERVER_ERROR_INVALID_METHOD_PARAMETERS,
-			       "Bad parameter #%d: expected %s, got %s",
-			       bad_value + 1, g_type_name (expected),
-			       g_type_name (G_VALUE_TYPE (&params->values[bad_value])));
+	GVariant *args;
+	GError *error = NULL;
+
+	args = soup_xmlrpc_params_parse (params, signature, &error);
+	if (!args) {
+		soup_xmlrpc_message_set_fault (msg,
+					       SOUP_XMLRPC_FAULT_SERVER_ERROR_INVALID_METHOD_PARAMETERS,
+					       "Wrong method signature: expected %s: %s",
+					       signature, error->message);
+	}
+
+	return args;
 }
 
 static void
-args_error (SoupMessage *msg, GValueArray *params, int expected)
+do_sum (SoupMessage *msg, SoupXMLRPCParams *params)
 {
-	soup_xmlrpc_set_fault (msg,
-			       SOUP_XMLRPC_FAULT_SERVER_ERROR_INVALID_METHOD_PARAMETERS,
-			       "Wrong number of parameters: expected %d, got %d",
-			       expected, params->n_values);
-}
+	GVariant *args;
+	GVariant *child;
+	GVariantIter iter;
+	double sum = 0.0, val;
 
-static void
-do_sum (SoupMessage *msg, GValueArray *params)
-{
-	int sum = 0, i, val;
-	GValueArray *nums;
-
-	if (params->n_values != 1) {
-		args_error (msg, params, 1);
+	if (!(args = parse_params (msg, params, "(ad)")))
 		return;
-	}
-	if (!soup_value_array_get_nth (params, 0, G_TYPE_VALUE_ARRAY, &nums)) {
-		type_error (msg, G_TYPE_VALUE_ARRAY, params, 0);
-		return;
-	}
 
-	for (i = 0; i < nums->n_values; i++) {
-		if (!soup_value_array_get_nth (nums, i, G_TYPE_INT, &val)) {
-			type_error (msg, G_TYPE_INT, nums, i);
-			return;
-		}
+	child = g_variant_get_child_value (args, 0);
+
+	g_variant_iter_init (&iter, child);
+	while (g_variant_iter_loop (&iter, "d", &val))
 		sum += val;
-	}
 
-	soup_xmlrpc_set_response (msg, G_TYPE_INT, sum);
+	soup_xmlrpc_message_set_response (msg, g_variant_new_double (sum), NULL);
 
+	g_variant_unref (args);
+	g_variant_unref (child);
 }
 
 static void
-do_countBools (SoupMessage *msg, GValueArray *params)
+do_countBools (SoupMessage *msg, SoupXMLRPCParams *params)
 {
-	int i, trues = 0, falses = 0;
-	GValueArray *bools;
-	GHashTable *ret = soup_value_hash_new ();
+	GVariant *args;
+	GVariant *child;
+	GVariantIter iter;
 	gboolean val;
+	int trues = 0, falses = 0;
+	GVariantDict dict;
 
-	if (params->n_values != 1) {
-		args_error (msg, params, 1);
+	if (!(args = parse_params (msg, params, "(ab)")))
 		return;
-	}
-	if (!soup_value_array_get_nth (params, 0, G_TYPE_VALUE_ARRAY, &bools)) {
-		type_error (msg, G_TYPE_VALUE_ARRAY, params, 0);
-		return;
-	}
 
-	for (i = 0; i < bools->n_values; i++) {
-		if (!soup_value_array_get_nth (bools, i, G_TYPE_BOOLEAN, &val)) {
-			type_error (msg, G_TYPE_BOOLEAN, params, i);
-			return;
-		}
+	child = g_variant_get_child_value (args, 0);
+
+	g_variant_iter_init (&iter, child);
+	while (g_variant_iter_loop (&iter, "b", &val)) {
 		if (val)
 			trues++;
 		else
 			falses++;
 	}
 
-	soup_value_hash_insert (ret, "true", G_TYPE_INT, trues);
-	soup_value_hash_insert (ret, "false", G_TYPE_INT, falses);
-	soup_xmlrpc_set_response (msg, G_TYPE_HASH_TABLE, ret);
-	g_hash_table_destroy (ret);
+	g_variant_dict_init (&dict, NULL);
+	g_variant_dict_insert (&dict, "true", "i", trues);
+	g_variant_dict_insert (&dict, "false", "i", falses);
 
+	soup_xmlrpc_message_set_response (msg, g_variant_dict_end (&dict), NULL);
+
+	g_variant_unref (args);
+	g_variant_unref (child);
 }
 
 static void
-do_md5sum (SoupMessage *msg, GValueArray *params)
+do_md5sum (SoupMessage *msg, SoupXMLRPCParams *params)
 {
+	GVariant *args;
+	GVariant *child;
 	GChecksum *checksum;
-	GByteArray *data, *digest;
+	GByteArray *digest;
 	gsize digest_len = 16;
 
-	if (params->n_values != 1) {
-		args_error (msg, params, 1);
+	if (!(args = parse_params (msg, params, "(ay)")))
 		return;
-	}
 
-	if (!soup_value_array_get_nth (params, 0, SOUP_TYPE_BYTE_ARRAY, &data)) {
-		type_error (msg, SOUP_TYPE_BYTE_ARRAY, params, 0);
-		return;
-	}
+	child = g_variant_get_child_value (args, 0);
+
 	checksum = g_checksum_new (G_CHECKSUM_MD5);
-	g_checksum_update (checksum, data->data, data->len);
+	g_checksum_update (checksum,
+			   g_variant_get_data (child),
+			   g_variant_get_size (child));
 	digest = g_byte_array_new ();
 	g_byte_array_set_size (digest, digest_len);
 	g_checksum_get_digest (checksum, digest->data, &digest_len);
 	g_checksum_free (checksum);
 
-	soup_xmlrpc_set_response (msg, SOUP_TYPE_BYTE_ARRAY, digest);
+	soup_xmlrpc_message_set_response (msg,
+					  g_variant_new_from_data (G_VARIANT_TYPE_BYTESTRING,
+								   digest->data, digest_len,
+								   TRUE, NULL, NULL),
+					  NULL);
 	g_byte_array_free (digest, TRUE);
+	g_variant_unref (child);
+	g_variant_unref (args);
 }
 
 
 static void
-do_dateChange (SoupMessage *msg, GValueArray *params)
+do_dateChange (SoupMessage *msg, SoupXMLRPCParams *params)
 {
-	GHashTable *arg;
+	GVariant *args;
+	GVariant *timestamp;
 	SoupDate *date;
+	GVariant *arg;
 	int val;
+	GError *error = NULL;
 
-	if (params->n_values != 2) {
-		args_error (msg, params, 2);
+	if (!(args = parse_params (msg, params, "(va{si})")))
 		return;
+
+	g_variant_get (args, "(v@a{si})", &timestamp, &arg);
+
+	date = soup_xmlrpc_variant_get_datetime (timestamp, &error);
+	if (!date) {
+		soup_xmlrpc_message_set_fault (msg,
+					       SOUP_XMLRPC_FAULT_SERVER_ERROR_INVALID_METHOD_PARAMETERS,
+					       "%s", error->message);
+		g_clear_error (&error);
+		goto fail;
 	}
 
-	if (!soup_value_array_get_nth (params, 0, SOUP_TYPE_DATE, &date)) {
-		type_error (msg, SOUP_TYPE_DATE, params, 0);
-		return;
-	}
-	if (!soup_value_array_get_nth (params, 1, G_TYPE_HASH_TABLE, &arg)) {
-		type_error (msg, G_TYPE_HASH_TABLE, params, 1);
-		return;
-	}
-
-	if (soup_value_hash_lookup (arg, "tm_year", G_TYPE_INT, &val))
+	if (g_variant_lookup (arg, "tm_year", "i", &val))
 		date->year = val + 1900;
-	if (soup_value_hash_lookup (arg, "tm_mon", G_TYPE_INT, &val))
+	if (g_variant_lookup (arg, "tm_mon", "i", &val))
 		date->month = val + 1;
-	if (soup_value_hash_lookup (arg, "tm_mday", G_TYPE_INT, &val))
+	if (g_variant_lookup (arg, "tm_mday", "i", &val))
 		date->day = val;
-	if (soup_value_hash_lookup (arg, "tm_hour", G_TYPE_INT, &val))
+	if (g_variant_lookup (arg, "tm_hour", "i", &val))
 		date->hour = val;
-	if (soup_value_hash_lookup (arg, "tm_min", G_TYPE_INT, &val))
+	if (g_variant_lookup (arg, "tm_min", "i", &val))
 		date->minute = val;
-	if (soup_value_hash_lookup (arg, "tm_sec", G_TYPE_INT, &val))
+	if (g_variant_lookup (arg, "tm_sec", "i", &val))
 		date->second = val;
 
-	soup_xmlrpc_set_response (msg, SOUP_TYPE_DATE, date);
+	soup_xmlrpc_message_set_response (msg,
+					  soup_xmlrpc_variant_new_datetime (date),
+					  NULL);
+
+	soup_date_free (date);
+
+fail:
+	g_variant_unref (args);
+	g_variant_unref (arg);
+	g_variant_unref (timestamp);
 }
 
 static void
-do_echo (SoupMessage *msg, GValueArray *params)
+do_echo (SoupMessage *msg, SoupXMLRPCParams *params)
 {
-	int i;
-	const char *val;
-	GValueArray *in, *out;
+	GVariant *args;
+	GVariant *child;
 
-	if (!soup_value_array_get_nth (params, 0, G_TYPE_VALUE_ARRAY, &in)) {
-		type_error (msg, G_TYPE_VALUE_ARRAY, params, 0);
+	if (!(args = parse_params (msg, params, "(as)")))
 		return;
-	}
 
-	out = g_value_array_new (in->n_values);
-	for (i = 0; i < in->n_values; i++) {
-		if (!soup_value_array_get_nth (in, i, G_TYPE_STRING, &val)) {
-			type_error (msg, G_TYPE_STRING, in, i);
-			return;
-		}
-		soup_value_array_append (out, G_TYPE_STRING, val);
-	}
-
-	soup_xmlrpc_set_response (msg, G_TYPE_VALUE_ARRAY, out);
-	g_value_array_free (out);
+	child = g_variant_get_child_value (args, 0);
+	soup_xmlrpc_message_set_response (msg, child, NULL);
+	g_variant_unref (args);
+	g_variant_unref (child);
 }
 
 static void
-do_ping (SoupMessage *msg, GValueArray *params)
+do_ping (SoupMessage *msg, SoupXMLRPCParams *params)
 {
-	if (params->n_values) {
-		args_error (msg, params, 0);
-		return;
-	}
+	GVariant *args;
 
-	soup_xmlrpc_set_response (msg, G_TYPE_STRING, "pong");
+	if (!(args = parse_params (msg, params, "()")))
+		return;
+
+	soup_xmlrpc_message_set_response (msg, g_variant_new_string ("pong"), NULL);
+	g_variant_unref (args);
 }
 
 static void
@@ -199,7 +197,8 @@ server_callback (SoupServer *server, SoupMessage *msg,
 		 SoupClientContext *context, gpointer data)
 {
 	char *method_name;
-	GValueArray *params;
+	SoupXMLRPCParams *params;
+	GError *error = NULL;
 
 	if (msg->method != SOUP_METHOD_POST) {
 		soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
@@ -208,11 +207,13 @@ server_callback (SoupServer *server, SoupMessage *msg,
 
 	soup_message_set_status (msg, SOUP_STATUS_OK);
 
-	if (!soup_xmlrpc_parse_method_call (msg->request_body->data,
-					    msg->request_body->length,
-					    &method_name, &params)) {
-		soup_xmlrpc_set_fault (msg, SOUP_XMLRPC_FAULT_PARSE_ERROR_NOT_WELL_FORMED,
-				       "Could not parse method call");
+	method_name = soup_xmlrpc_parse_request (msg->request_body->data,
+						 msg->request_body->length,
+						 &params, &error);
+	if (!method_name) {
+		soup_xmlrpc_message_set_fault (msg, SOUP_XMLRPC_FAULT_PARSE_ERROR_NOT_WELL_FORMED,
+				       "Could not parse method call: %s", error->message);
+		g_clear_error (&error);
 		return;
 	}
 
@@ -229,12 +230,12 @@ server_callback (SoupServer *server, SoupMessage *msg,
 	else if (!strcmp (method_name, "ping"))
 		do_ping (msg, params);
 	else {
-		soup_xmlrpc_set_fault (msg, SOUP_XMLRPC_FAULT_SERVER_ERROR_REQUESTED_METHOD_NOT_FOUND,
+		soup_xmlrpc_message_set_fault (msg, SOUP_XMLRPC_FAULT_SERVER_ERROR_REQUESTED_METHOD_NOT_FOUND,
 				       "Unknown method %s", method_name);
 	}
 
 	g_free (method_name);
-	g_value_array_free (params);
+	soup_xmlrpc_params_free (params);
 }
 
 static gboolean
@@ -355,7 +356,7 @@ main (int argc, char **argv)
 	} else {
 		GMainLoop *loop;
 
-		g_print ("Listening on port %d\n", soup_server_get_port (server));
+		g_print ("Listening on port %d\n", server_uri->port);
 
 		loop = g_main_loop_new (NULL, TRUE);
 		g_main_loop_run (loop);

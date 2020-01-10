@@ -5,6 +5,10 @@
  * Copyright (C) 2007, 2008 Red Hat, Inc.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string.h>
 
 #include "soup-message-headers.h"
@@ -110,6 +114,22 @@ soup_message_headers_free (SoupMessageHeaders *hdrs)
 G_DEFINE_BOXED_TYPE (SoupMessageHeaders, soup_message_headers, soup_message_headers_copy, soup_message_headers_free)
 
 /**
+ * soup_message_headers_get_headers_type:
+ * @hdrs: a #SoupMessageHeaders
+ *
+ * Gets the type of headers.
+ *
+ * Return value: the header's type.
+ *
+ * Since: 2.50
+ **/
+SoupMessageHeadersType
+soup_message_headers_get_headers_type (SoupMessageHeaders *hdrs)
+{
+	return hdrs->type;
+}
+
+/**
  * soup_message_headers_clear:
  * @hdrs: a #SoupMessageHeaders
  *
@@ -119,7 +139,7 @@ void
 soup_message_headers_clear (SoupMessageHeaders *hdrs)
 {
 	SoupHeader *hdr_array = (SoupHeader *)hdrs->array->data;
-	int i;
+	guint i;
 
 	for (i = 0; i < hdrs->array->len; i++)
 		g_free (hdr_array[i].value);
@@ -320,6 +340,59 @@ soup_message_headers_get_one (SoupMessageHeaders *hdrs, const char *name)
 }
 
 /**
+ * soup_message_headers_header_contains:
+ * @hdrs: a #SoupMessageHeaders
+ * @name: header name
+ * @token: token to look for
+ *
+ * Checks whether the list-valued header @name is present in @hdrs,
+ * and contains a case-insensitive match for @token.
+ *
+ * (If @name is present in @hdrs, then this is equivalent to calling
+ * soup_header_contains() on its value.)
+ *
+ * Return value: %TRUE if the header is present and contains @token,
+ *   %FALSE otherwise.
+ *
+ * Since: 2.50
+ **/
+gboolean
+soup_message_headers_header_contains (SoupMessageHeaders *hdrs, const char *name, const char *token)
+{
+	const char *value;
+
+	value = soup_message_headers_get_list (hdrs, name);
+	if (!value)
+		return FALSE;
+	return soup_header_contains (value, token);
+}
+
+/**
+ * soup_message_headers_header_equals:
+ * @hdrs: a #SoupMessageHeaders
+ * @name: header name
+ * @value: expected value
+ *
+ * Checks whether the header @name is present in @hdrs and is
+ * (case-insensitively) equal to @value.
+ *
+ * Return value: %TRUE if the header is present and its value is
+ *   @value, %FALSE otherwise.
+ *
+ * Since: 2.50
+ **/
+gboolean
+soup_message_headers_header_equals (SoupMessageHeaders *hdrs, const char *name, const char *value)
+{
+        const char *internal_value;
+
+        internal_value = soup_message_headers_get_list (hdrs, name);
+	if (!internal_value)
+		return FALSE;
+        return !g_ascii_strcasecmp (internal_value, value);
+}
+
+/**
  * soup_message_headers_get_list:
  * @hdrs: a #SoupMessageHeaders
  * @name: header name
@@ -506,7 +579,7 @@ soup_message_headers_foreach (SoupMessageHeaders *hdrs,
 			      gpointer            user_data)
 {
 	SoupHeader *hdr_array = (SoupHeader *)hdrs->array->data;
-	int i;
+	guint i;
 
 	for (i = 0; i < hdrs->array->len; i++)
 		func (hdr_array[i].name, hdr_array[i].value, user_data);
@@ -876,7 +949,6 @@ soup_message_headers_get_ranges_internal (SoupMessageHeaders  *hdrs,
 	GSList *range_list, *r;
 	GArray *array;
 	char *spec, *end;
-	int i;
 	guint status = SOUP_STATUS_OK;
 
 	if (!range || strncmp (range, "bytes", 5) != 0)
@@ -935,6 +1007,8 @@ soup_message_headers_get_ranges_internal (SoupMessageHeaders  *hdrs,
 	}
 
 	if (total_length) {
+		guint i;
+
 		g_array_sort (array, sort_ranges);
 		for (i = 1; i < array->len; i++) {
 			SoupRange *cur = &((SoupRange *)array->data)[i];

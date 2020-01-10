@@ -30,9 +30,11 @@
 #endif
 
 #include <string.h>
+#include <glib/gstdio.h>
 
 #include "soup-cache.h"
 #include "soup-body-input-stream.h"
+#include "soup-cache-client-input-stream.h"
 #include "soup-cache-input-stream.h"
 #include "soup-cache-private.h"
 #include "soup-content-processor.h"
@@ -670,8 +672,7 @@ GInputStream *
 soup_cache_send_response (SoupCache *cache, SoupMessage *msg)
 {
 	SoupCacheEntry *entry;
-	char *current_age;
-	GInputStream *file_stream, *body_stream, *cache_stream;
+	GInputStream *file_stream, *body_stream, *cache_stream, *client_stream;
 	GFile *file;
 
 	g_return_val_if_fail (SOUP_IS_CACHE (cache), NULL);
@@ -698,18 +699,14 @@ soup_cache_send_response (SoupCache *cache, SoupMessage *msg)
 	   in course is over by now */
 	entry->being_validated = FALSE;
 
+	/* Message starting */
+	soup_message_starting (msg);
+
 	/* Status */
 	soup_message_set_status (msg, entry->status_code);
 
 	/* Headers */
 	copy_end_to_end_headers (entry->headers, msg->response_headers);
-
-	/* Add 'Age' header with the current age */
-	current_age = g_strdup_printf ("%d", soup_cache_entry_get_current_age (entry));
-	soup_message_headers_replace (msg->response_headers,
-				      "Age",
-				      current_age);
-	g_free (current_age);
 
 	/* Create the cache stream. */
 	soup_message_disable_feature (msg, SOUP_TYPE_CACHE);
@@ -718,7 +715,10 @@ soup_cache_send_response (SoupCache *cache, SoupMessage *msg)
 							SOUP_STAGE_ENTITY_BODY);
 	g_object_unref (body_stream);
 
-	return cache_stream;
+	client_stream = soup_cache_client_input_stream_new (cache_stream);
+	g_object_unref (cache_stream);
+
+	return client_stream;
 }
 
 static void
@@ -729,11 +729,17 @@ msg_got_headers_cb (SoupMessage *msg, gpointer user_data)
 }
 
 static void
-request_started (SoupSessionFeature *feature, SoupSession *session,
-		 SoupMessage *msg, SoupSocket *socket)
+msg_starting_cb (SoupMessage *msg, gpointer user_data)
 {
 	g_object_set_data (G_OBJECT (msg), "request-time", GINT_TO_POINTER (time (NULL)));
-	g_signal_connect (msg, "got-headers", G_CALLBACK (msg_got_headers_cb), NULL);
+	g_signal_connect (msg, "got-headers", G_CALLBACK (msg_got_headers_cb), user_data);
+	g_signal_handlers_disconnect_by_func (msg, msg_starting_cb, user_data);
+}
+
+static void
+request_queued (SoupSessionFeature *feature, SoupSession *session, SoupMessage *msg)
+{
+	g_signal_connect (msg, "starting", G_CALLBACK (msg_starting_cb), feature);
 }
 
 static void
@@ -753,7 +759,7 @@ soup_cache_session_feature_init (SoupSessionFeatureInterface *feature_interface,
 		g_type_default_interface_peek (SOUP_TYPE_SESSION_FEATURE);
 
 	feature_interface->attach = attach;
-	feature_interface->request_started = request_started;
+	feature_interface->request_queued = request_queued;
 }
 
 typedef struct {
@@ -1076,7 +1082,7 @@ SoupCacheResponse
 soup_cache_has_response (SoupCache *cache, SoupMessage *msg)
 {
 	SoupCacheEntry *entry;
-	const char *cache_control, *pragma;
+	const char *cache_control;
 	gpointer value;
 	int max_age, max_stale, min_fresh;
 	GList *lru_item, *item;
@@ -1137,8 +1143,7 @@ soup_cache_has_response (SoupCache *cache, SoupMessage *msg)
 
 	/* For HTTP 1.0 compatibility. RFC2616 section 14.9.4
 	 */
-	pragma = soup_message_headers_get_list (msg->request_headers, "Pragma");
-	if (pragma && soup_header_contains (pragma, "no-cache"))
+	if (soup_message_headers_header_contains (msg->request_headers, "Pragma", "no-cache"))
 		return SOUP_CACHE_RESPONSE_STALE;
 
 	cache_control = soup_message_headers_get_list (msg->request_headers, "Cache-Control");
@@ -1193,12 +1198,17 @@ soup_cache_has_response (SoupCache *cache, SoupMessage *msg)
 	/* 6. The stored response is either: fresh, allowed to be
 	 * served stale or succesfully validated
 	 */
-	/* TODO consider also proxy-revalidate & s-maxage */
-	if (entry->must_revalidate)
-		return SOUP_CACHE_RESPONSE_NEEDS_VALIDATION;
-
 	if (!soup_cache_entry_is_fresh_enough (entry, min_fresh)) {
 		/* Not fresh, can it be served stale? */
+
+		/* When the must-revalidate directive is present in a
+		 * response received by a cache, that cache MUST NOT
+		 * use the entry after it becomes stale
+		 */
+		/* TODO consider also proxy-revalidate & s-maxage */
+		if (entry->must_revalidate)
+			return SOUP_CACHE_RESPONSE_NEEDS_VALIDATION;
+
 		if (max_stale != -1) {
 			/* G_MAXINT32 means we accept any staleness */
 			if (max_stale == G_MAXINT32)
@@ -1282,6 +1292,25 @@ soup_cache_flush (SoupCache *cache)
 		g_warning ("Cache flush finished despite %d pending requests", cache->priv->n_pending);
 }
 
+typedef void (* SoupCacheForeachFileFunc) (SoupCache *cache, const char *name, gpointer user_data);
+
+static void
+soup_cache_foreach_file (SoupCache *cache, SoupCacheForeachFileFunc func, gpointer user_data)
+{
+	GDir *dir;
+	const char *name;
+	SoupCachePrivate *priv = cache->priv;
+
+	dir = g_dir_open (priv->cache_dir, 0, NULL);
+	while ((name = g_dir_read_name (dir))) {
+		if (g_str_has_prefix (name, "soup."))
+		    continue;
+
+		func (cache, name, user_data);
+	}
+	g_dir_close (dir);
+}
+
 static void
 clear_cache_item (gpointer data,
 		  gpointer user_data)
@@ -1290,28 +1319,19 @@ clear_cache_item (gpointer data,
 }
 
 static void
+delete_cache_file (SoupCache *cache, const char *name, gpointer user_data)
+{
+	gchar *path;
+
+	path = g_build_filename (cache->priv->cache_dir, name, NULL);
+	g_unlink (path);
+	g_free (path);
+}
+
+static void
 clear_cache_files (SoupCache *cache)
 {
-	GFileInfo *file_info;
-	GFileEnumerator *file_enumerator;
-	GFile *cache_dir_file = g_file_new_for_path (cache->priv->cache_dir);
-
-	file_enumerator = g_file_enumerate_children (cache_dir_file, G_FILE_ATTRIBUTE_STANDARD_NAME,
-						     G_FILE_QUERY_INFO_NONE, NULL, NULL);
-	if (file_enumerator) {
-		while ((file_info = g_file_enumerator_next_file (file_enumerator, NULL, NULL)) != NULL) {
-			const char *filename = g_file_info_get_name (file_info);
-
-			if (strcmp (filename, SOUP_CACHE_FILE) != 0) {
-				GFile *cache_file = g_file_get_child (cache_dir_file, filename);
-				g_file_delete (cache_file, NULL, NULL);
-				g_object_unref (cache_file);
-			}
-			g_object_unref (file_info);
-		}
-		g_object_unref (file_enumerator);
-	}
-	g_object_unref (cache_dir_file);
+	soup_cache_foreach_file (cache, delete_cache_file, NULL);
 }
 
 /**
@@ -1367,6 +1387,7 @@ soup_cache_generate_conditional_request (SoupCache *cache, SoupMessage *original
 	/* Copy the data we need from the original message */
 	uri = soup_message_get_uri (original);
 	msg = soup_message_new_from_uri (original->method, uri);
+	soup_message_set_flags (msg, soup_message_get_flags (original));
 	soup_message_disable_feature (msg, SOUP_TYPE_CACHE);
 
 	soup_message_headers_foreach (original->request_headers,
@@ -1498,6 +1519,32 @@ soup_cache_dump (SoupCache *cache)
 	g_variant_unref (cache_variant);
 }
 
+static inline guint32
+get_key_from_cache_filename (const char *name)
+{
+	guint64 key;
+
+	key = g_ascii_strtoull (name, NULL, 10);
+	return key ? (guint32)key : 0;
+}
+
+static void
+insert_cache_file (SoupCache *cache, const char *name, GHashTable *leaked_entries)
+{
+	gchar *path;
+
+	path = g_build_filename (cache->priv->cache_dir, name, NULL);
+	if (g_file_test (path, G_FILE_TEST_IS_REGULAR)) {
+		guint32 key = get_key_from_cache_filename (name);
+
+		if (key) {
+			g_hash_table_insert (leaked_entries, GUINT_TO_POINTER (key), path);
+			return;
+		}
+	}
+	g_free (path);
+}
+
 /**
  * soup_cache_load:
  * @cache: a #SoupCache
@@ -1519,6 +1566,9 @@ soup_cache_load (SoupCache *cache)
 	SoupCacheEntry *entry;
 	SoupCachePrivate *priv = cache->priv;
 	guint16 version, status_code;
+	GHashTable *leaked_entries = NULL;
+	GHashTableIter iter;
+	gpointer value;
 
 	filename = g_build_filename (priv->cache_dir, SOUP_CACHE_FILE, NULL);
 	if (!g_file_get_contents (filename, &contents, &length, NULL)) {
@@ -1538,6 +1588,9 @@ soup_cache_load (SoupCache *cache)
 		clear_cache_files (cache);
 		return;
 	}
+
+	leaked_entries = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_free);
+	soup_cache_foreach_file (cache, (SoupCacheForeachFileFunc)insert_cache_file, leaked_entries);
 
 	while (g_variant_iter_loop (entries_iter, SOUP_CACHE_PHEADERS_FORMAT,
 				    &url, &must_revalidate, &freshness_lifetime, &corrected_initial_age,
@@ -1574,7 +1627,15 @@ soup_cache_load (SoupCache *cache)
 
 		if (!soup_cache_entry_insert (cache, entry, FALSE))
 			soup_cache_entry_free (entry);
+		else
+			g_hash_table_remove (leaked_entries, GUINT_TO_POINTER (entry->key));
 	}
+
+	/* Remove the leaked files */
+	g_hash_table_iter_init (&iter, leaked_entries);
+	while (g_hash_table_iter_next (&iter, NULL, &value))
+		g_unlink ((char *)value);
+	g_hash_table_destroy (leaked_entries);
 
 	cache->priv->lru_start = g_list_reverse (cache->priv->lru_start);
 

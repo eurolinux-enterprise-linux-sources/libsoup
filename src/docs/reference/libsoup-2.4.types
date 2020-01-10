@@ -6,9 +6,9 @@ soup_auth_domain_digest_get_type
 soup_auth_domain_get_type
 soup_auth_get_type
 soup_auth_manager_get_type
+soup_auth_negotiate_get_type
 soup_auth_ntlm_get_type
 soup_buffer_get_type
-soup_byte_array_get_type
 soup_cache_get_type
 soup_client_context_get_type
 soup_content_decoder_get_type
@@ -36,3 +36,4 @@ soup_session_get_type
 soup_session_sync_get_type
 soup_socket_get_type
 soup_uri_get_type
+soup_websocket_connection_get_type

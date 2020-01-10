@@ -9,6 +9,7 @@
 #include <libsoup/soup-types.h>
 #include <libsoup/soup-address.h>
 #include <libsoup/soup-message.h>
+#include <libsoup/soup-websocket-connection.h>
 
 G_BEGIN_DECLS
 
@@ -58,6 +59,7 @@ typedef struct {
 	void (*_libsoup_reserved4) (void);
 } SoupSessionClass;
 
+SOUP_AVAILABLE_IN_2_42
 GType soup_session_get_type (void);
 
 #define SOUP_SESSION_LOCAL_ADDRESS          "local-address"
@@ -91,26 +93,34 @@ SOUP_AVAILABLE_IN_2_42
 SoupSession    *soup_session_new_with_options (const char *optname1,
 					       ...) G_GNUC_NULL_TERMINATED;
 
+SOUP_AVAILABLE_IN_2_4
 void            soup_session_queue_message    (SoupSession           *session,
 					       SoupMessage           *msg,
 					       SoupSessionCallback    callback,
 					       gpointer               user_data);
+SOUP_AVAILABLE_IN_2_4
 void            soup_session_requeue_message  (SoupSession           *session,
 					       SoupMessage           *msg);
 
+SOUP_AVAILABLE_IN_2_4
 guint           soup_session_send_message     (SoupSession           *session,
 					       SoupMessage           *msg);
 
+SOUP_AVAILABLE_IN_2_4
 void            soup_session_pause_message    (SoupSession           *session,
 					       SoupMessage           *msg);
+SOUP_AVAILABLE_IN_2_4
 void            soup_session_unpause_message  (SoupSession           *session,
 					       SoupMessage           *msg);
 
+SOUP_AVAILABLE_IN_2_4
 void            soup_session_cancel_message   (SoupSession           *session,
 					       SoupMessage           *msg,
 					       guint                  status_code);
+SOUP_AVAILABLE_IN_2_4
 void            soup_session_abort            (SoupSession           *session);
 
+SOUP_AVAILABLE_IN_2_4
 GMainContext   *soup_session_get_async_context(SoupSession           *session);
 
 SOUP_AVAILABLE_IN_2_42
@@ -130,7 +140,7 @@ GInputStream   *soup_session_send             (SoupSession           *session,
 					       GError               **error);
 
 #ifndef SOUP_DISABLE_DEPRECATED
-/* SOUP_AVAILABLE_IN_2_30 -- this trips up gtkdoc-scan */
+SOUP_AVAILABLE_IN_2_30
 SOUP_DEPRECATED_IN_2_38_FOR (soup_session_prefetch_dns)
 void            soup_session_prepare_for_uri  (SoupSession           *session,
 					       SoupURI               *uri);
@@ -205,6 +215,24 @@ typedef enum {
 	SOUP_REQUEST_ERROR_PARSING,
 	SOUP_REQUEST_ERROR_ENCODING
 } SoupRequestError;
+
+SOUP_AVAILABLE_IN_2_50
+GIOStream *soup_session_steal_connection (SoupSession *session,
+					  SoupMessage *msg);
+
+SOUP_AVAILABLE_IN_2_50
+void                     soup_session_websocket_connect_async  (SoupSession          *session,
+								SoupMessage          *msg,
+								const char           *origin,
+								char                **protocols,
+								GCancellable         *cancellable,
+								GAsyncReadyCallback   callback,
+								gpointer              user_data);
+
+SOUP_AVAILABLE_IN_2_50
+SoupWebsocketConnection *soup_session_websocket_connect_finish (SoupSession          *session,
+								GAsyncResult         *result,
+								GError              **error);
 
 G_END_DECLS
 

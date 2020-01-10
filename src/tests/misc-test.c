@@ -404,7 +404,7 @@ ea_connection_created (SoupSession *session, GObject *conn, gpointer user_data)
 }
 
 static void
-ea_request_started (SoupSession *session, SoupMessage *msg, SoupSocket *socket, gpointer user_data)
+ea_message_starting (SoupMessage *msg, SoupSession *session)
 {
 	soup_session_cancel_message (session, msg, SOUP_STATUS_CANCELLED);
 }
@@ -455,8 +455,8 @@ do_early_abort_test (void)
 	session = soup_test_session_new (SOUP_TYPE_SESSION_ASYNC, NULL);
 	msg = soup_message_new_from_uri ("GET", base_uri);
 
-	g_signal_connect (session, "request-started",
-			  G_CALLBACK (ea_request_started), NULL);
+	g_signal_connect (msg, "starting",
+			  G_CALLBACK (ea_message_starting), session);
 	soup_session_send_message (session, msg);
 	debug_printf (2, "  Message 3 completed\n");
 
@@ -507,10 +507,18 @@ ear_three_completed (GObject *source, GAsyncResult *result, gpointer loop)
 }
 
 static void
-ear_request_started (SoupSession *session, SoupMessage *msg,
-		     SoupSocket *socket, gpointer cancellable)
+ear_message_starting (SoupMessage *msg, gpointer cancellable)
 {
 	g_cancellable_cancel (cancellable);
+}
+
+static void
+ear_request_queued (SoupSession *session, SoupMessage *msg,
+		    gpointer cancellable)
+{
+	g_signal_connect (msg, "starting",
+			  G_CALLBACK (ear_message_starting),
+			  cancellable);
 }
 
 static void
@@ -560,8 +568,8 @@ do_early_abort_req_test (void)
 	req = soup_session_request_uri (session, base_uri, NULL);
 
 	cancellable = g_cancellable_new ();
-	g_signal_connect (session, "request-started",
-			  G_CALLBACK (ear_request_started), cancellable);
+	g_signal_connect (session, "request-queued",
+			  G_CALLBACK (ear_request_queued), cancellable);
 	soup_request_send_async (req, cancellable, ear_three_completed, loop);
 	g_main_loop_run (loop);
 	g_object_unref (req);
@@ -900,6 +908,254 @@ do_pause_abort_test (void)
 	g_assert_null (ptr);
 }
 
+static GMainLoop *pause_cancel_loop;
+
+static void
+pause_cancel_got_headers (SoupMessage *msg, gpointer user_data)
+{
+	SoupSession *session = user_data;
+
+	soup_session_pause_message (session, msg);
+	g_main_loop_quit (pause_cancel_loop);
+}
+
+static void
+pause_cancel_finished (SoupSession *session, SoupMessage *msg, gpointer user_data)
+{
+	gboolean *finished = user_data;
+
+	*finished = TRUE;
+	g_main_loop_quit (pause_cancel_loop);
+}
+
+static gboolean
+pause_cancel_timeout (gpointer user_data)
+{
+	gboolean *timed_out = user_data;
+
+	*timed_out = TRUE;
+	g_main_loop_quit (pause_cancel_loop);
+	return FALSE;
+}
+
+static void
+do_pause_cancel_test (void)
+{
+	SoupSession *session;
+	SoupMessage *msg;
+	gboolean finished = FALSE, timed_out = FALSE;
+	guint timeout_id;
+
+	g_test_bug ("745094");
+
+	session = soup_test_session_new (SOUP_TYPE_SESSION, NULL);
+	pause_cancel_loop = g_main_loop_new (NULL, FALSE);
+
+	timeout_id = g_timeout_add_seconds (5, pause_cancel_timeout, &timed_out);
+
+	msg = soup_message_new_from_uri ("GET", base_uri);
+	g_object_ref (msg);
+	g_signal_connect (msg, "got-headers",
+			  G_CALLBACK (pause_cancel_got_headers), session);
+
+	soup_session_queue_message (session, msg, pause_cancel_finished, &finished);
+	g_main_loop_run (pause_cancel_loop);
+	g_assert_false (finished);
+
+	soup_session_cancel_message (session, msg, SOUP_STATUS_CANCELLED);
+	g_main_loop_run (pause_cancel_loop);
+	g_assert_true (finished);
+	g_assert_false (timed_out);
+
+	soup_test_assert_message_status (msg, SOUP_STATUS_CANCELLED);
+	g_object_unref (msg);
+
+	soup_test_session_abort_unref (session);
+	g_main_loop_unref (pause_cancel_loop);
+	if (!timed_out)
+		g_source_remove (timeout_id);
+}
+
+static gboolean
+run_echo_server (gpointer user_data)
+{
+	GIOStream *stream = user_data;
+	GInputStream *istream;
+	GDataInputStream *distream;
+	GOutputStream *ostream;
+	char *str, *caps;
+	gssize n;
+	GError *error = NULL;
+
+	istream = g_io_stream_get_input_stream (stream);
+	distream = G_DATA_INPUT_STREAM (g_data_input_stream_new (istream));
+	ostream = g_io_stream_get_output_stream (stream);
+
+	/* Echo until the client disconnects */
+	while (TRUE) {
+		str = g_data_input_stream_read_line (distream, NULL, NULL, &error);
+		g_assert_no_error (error);
+		if (!str)
+			break;
+
+		caps = g_ascii_strup (str, -1);
+		n = g_output_stream_write (ostream, caps, strlen (caps), NULL, &error);
+		g_assert_no_error (error);
+		g_assert_cmpint (n, ==, strlen (caps)); 
+		n = g_output_stream_write (ostream, "\n", 1, NULL, &error);
+		g_assert_no_error (error);
+		g_assert_cmpint (n, ==, 1);
+		g_free (caps);
+		g_free (str);
+	}
+
+	g_object_unref (distream);
+
+	g_io_stream_close (stream, NULL, &error);
+	g_assert_no_error (error);
+	g_object_unref (stream);
+
+	return FALSE;
+}
+
+static void
+steal_after_upgrade (SoupMessage *msg, gpointer user_data)
+{
+	SoupClientContext *context = user_data;
+	GIOStream *stream;
+	GSource *source;
+
+	/* This should not ever be seen. */
+	soup_message_set_status (msg, SOUP_STATUS_INTERNAL_SERVER_ERROR);
+
+	stream = soup_client_context_steal_connection (context);
+
+	source = g_idle_source_new ();
+	g_source_set_callback (source, run_echo_server, stream, NULL);
+	g_source_attach (source, g_main_context_get_thread_default ());
+	g_source_unref (source);
+}
+
+static void
+upgrade_server_callback (SoupServer *server, SoupMessage *msg,
+			 const char *path, GHashTable *query,
+			 SoupClientContext *context, gpointer data)
+{
+	if (msg->method != SOUP_METHOD_GET) {
+		soup_message_set_status (msg, SOUP_STATUS_NOT_IMPLEMENTED);
+		return;
+	}
+
+	soup_message_set_status (msg, SOUP_STATUS_SWITCHING_PROTOCOLS);
+	soup_message_headers_append (msg->request_headers, "Upgrade", "ECHO");
+	soup_message_headers_append (msg->request_headers, "Connection", "upgrade");
+
+	g_signal_connect (msg, "wrote-informational",
+			  G_CALLBACK (steal_after_upgrade), context);
+}
+
+static void
+callback_not_reached (SoupSession *session, SoupMessage *msg, gpointer user_data)
+{
+	g_assert_not_reached ();
+}
+
+static void
+switching_protocols (SoupMessage *msg, gpointer user_data)
+{
+	GIOStream **out_iostream = user_data;
+	SoupSession *session = g_object_get_data (G_OBJECT (msg), "SoupSession");
+
+	*out_iostream = soup_session_steal_connection (session, msg);
+}
+
+static void
+do_stealing_test (gconstpointer data)
+{
+	gboolean sync = GPOINTER_TO_INT (data);
+	SoupServer *server;
+	SoupURI *uri;
+	SoupSession *session;
+	SoupMessage *msg;
+	GIOStream *iostream;
+	GInputStream *istream;
+	GDataInputStream *distream;
+	GOutputStream *ostream;
+	int i;
+	gssize n;
+	char *str, *caps;
+	GError *error = NULL;
+	static const char *strings[] = { "one", "two", "three", "four", "five" };
+
+	server = soup_test_server_new (SOUP_TEST_SERVER_IN_THREAD);
+	uri = soup_test_server_get_uri (server, SOUP_URI_SCHEME_HTTP, "127.0.0.1");
+	soup_server_add_handler (server, NULL, upgrade_server_callback, NULL, NULL);
+
+	session = soup_test_session_new (SOUP_TYPE_SESSION, NULL);
+	msg = soup_message_new_from_uri ("GET", uri);
+	soup_message_headers_append (msg->request_headers, "Upgrade", "echo");
+	soup_message_headers_append (msg->request_headers, "Connection", "upgrade");
+	g_object_set_data (G_OBJECT (msg), "SoupSession", session);
+
+	soup_message_add_status_code_handler (msg, "got-informational",
+					      SOUP_STATUS_SWITCHING_PROTOCOLS,
+					      G_CALLBACK (switching_protocols), &iostream);
+
+	iostream = NULL;
+
+	if (sync) {
+		soup_session_send_message (session, msg);
+		soup_test_assert_message_status (msg, SOUP_STATUS_SWITCHING_PROTOCOLS);
+	} else {
+		g_object_ref (msg);
+		soup_session_queue_message (session, msg, callback_not_reached, NULL);
+		while (iostream == NULL)
+			g_main_context_iteration (NULL, TRUE);
+	}
+
+	g_assert (iostream != NULL);
+
+	g_object_unref (msg);
+	soup_test_session_abort_unref (session);
+	soup_uri_free (uri);
+
+	/* Now iostream connects to a (capitalizing) echo server */
+
+	istream = g_io_stream_get_input_stream (iostream);
+	distream = G_DATA_INPUT_STREAM (g_data_input_stream_new (istream));
+	ostream = g_io_stream_get_output_stream (iostream);
+
+	for (i = 0; i < G_N_ELEMENTS (strings); i++) {
+		n = g_output_stream_write (ostream, strings[i], strlen (strings[i]),
+					   NULL, &error);
+		g_assert_no_error (error);
+		g_assert_cmpint (n, ==, strlen (strings[i]));
+		n = g_output_stream_write (ostream, "\n", 1, NULL, &error);
+		g_assert_no_error (error);
+		g_assert_cmpint (n, ==, 1);
+	}
+
+	for (i = 0; i < G_N_ELEMENTS (strings); i++) {
+		str = g_data_input_stream_read_line (distream, NULL, NULL, &error);
+		g_assert_no_error (error);
+		caps = g_ascii_strup (strings[i], -1);
+		g_assert_cmpstr (caps, ==, str);
+		g_free (caps);
+		g_free (str);
+	}
+
+	g_object_unref (distream);
+
+	g_io_stream_close (iostream, NULL, &error);
+	g_assert_no_error (error);
+	g_object_unref (iostream);
+
+	/* We can't do this until the end because it's in another thread, and
+	 * soup_test_server_quit_unref() will wait for that thread to exit.
+	 */ 
+	soup_test_server_quit_unref (server);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -940,6 +1196,9 @@ main (int argc, char **argv)
 	g_test_add_func ("/misc/aliases", do_aliases_test);
 	g_test_add_func ("/misc/idle-on-dispose", do_idle_on_dispose_test);
 	g_test_add_func ("/misc/pause-abort", do_pause_abort_test);
+	g_test_add_func ("/misc/pause-cancel", do_pause_cancel_test);
+	g_test_add_data_func ("/misc/stealing/async", GINT_TO_POINTER (FALSE), do_stealing_test);
+	g_test_add_data_func ("/misc/stealing/sync", GINT_TO_POINTER (TRUE), do_stealing_test);
 
 	ret = g_test_run ();
 
@@ -951,5 +1210,6 @@ main (int argc, char **argv)
 		soup_test_server_quit_unref (ssl_server);
 	}
 
+	test_cleanup ();
 	return ret;
 }

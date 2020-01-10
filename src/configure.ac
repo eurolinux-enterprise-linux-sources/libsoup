@@ -3,8 +3,8 @@ dnl *** Initialize automake and set version ***
 dnl *******************************************
 
 m4_define([soup_major_version], [2])
-m4_define([soup_minor_version], [48])
-m4_define([soup_micro_version], [1])
+m4_define([soup_minor_version], [56])
+m4_define([soup_micro_version], [0])
 
 AC_PREREQ(2.63)
 AC_INIT([libsoup],[soup_major_version.soup_minor_version.soup_micro_version],[http://bugzilla.gnome.org/enter_bug.cgi?product=libsoup])
@@ -28,10 +28,10 @@ SOUP_API_VERSION=2.4
 AC_SUBST(SOUP_API_VERSION)
 
 # Increment on interface addition. Reset on removal.
-SOUP_AGE=7
+SOUP_AGE=8
 
 # Increment on interface add, remove, or change.
-SOUP_CURRENT=8
+SOUP_CURRENT=9
 
 # Increment on source change. Reset when CURRENT changes.
 SOUP_REVISION=0
@@ -47,7 +47,7 @@ dnl ***************************
 debug_default=minimum
 
 # Declare --enable-* args and collect ac_help strings
-AC_ARG_ENABLE(debug, 
+AC_ARG_ENABLE(debug,
 	      AS_HELP_STRING([--enable-debug=[no/minimum/yes]],
 			     [turn on debugging (default=$debug_default)]),,
 	      enable_debug=$debug_default)
@@ -155,12 +155,21 @@ AC_SUBST(HAVE_GNOME)
 dnl ***************
 dnl *** gtk-doc ***
 dnl ***************
-GTK_DOC_CHECK([1.10])
+# gtkdocize greps for ^GTK_DOC_CHECK and parses it, so you need to have
+# it on it's own line.
+m4_ifdef([GTK_DOC_CHECK], [
+GTK_DOC_CHECK([1.20], [--flavour no-tmpl])
+],[])
 
 dnl *****************************
 dnl *** gobject-introspection ***
 dnl *****************************
 GOBJECT_INTROSPECTION_CHECK([0.9.5])
+
+if test "$found_introspection" != "yes" -a "$enable_vala" = ""; then
+	enable_vala=no
+fi
+VAPIGEN_CHECK()
 
 AC_MSG_CHECKING([for glib-networking (glib TLS implementation)])
 save_CFLAGS="$CFLAGS"
@@ -262,8 +271,8 @@ else
     have_apache=0
 fi
 AM_CONDITIONAL(HAVE_APACHE, test "$have_apache" = 1)
-AM_CONDITIONAL(HAVE_APACHE_2_2, test "$apache_version" = 2.2)
-AM_CONDITIONAL(HAVE_APACHE_2_4, test "$apache_version" = 2.4)
+AM_CONDITIONAL(HAVE_APACHE_2_2, test "$have_apache" = 1 -a "$apache_version" = 2.2)
+AM_CONDITIONAL(HAVE_APACHE_2_4, test "$have_apache" = 1 -a "$apache_version" = 2.4)
 
 if test "$have_apache" = 1; then
     AC_CHECK_PROGS(PHP, php php5)
@@ -313,6 +322,36 @@ fi
 AC_SUBST(ntlm_auth)
 AC_DEFINE_UNQUOTED(NTLM_AUTH, "$ntlm_auth", [Samba's 'winbind' daemon helper 'ntlm_auth' which can be used for NTLM single-sign-on])
 
+AX_CODE_COVERAGE
+
+dnl **********************
+dnl *** GSSAPI support ***
+dnl **********************
+AC_ARG_WITH(gssapi,
+	    AS_HELP_STRING([--with-gssapi],
+	    [Build with GSSAPI support [default=auto]]))
+
+if test "$with_gssapi" != "no"; then
+    AC_ARG_WITH(krb5-config,
+		AS_HELP_STRING([--with-krb5-config=PATH],[Where to look for krb5-config, path points to krb5-config installation (default: /usr/kerberos/bin/)]),
+		KRB5_CONFIG="$withval",
+		[AC_PATH_PROGS(KRB5_CONFIG, krb5-config, no, ${PATH}:/usr/kerberos/bin)])
+
+    if test "$KRB5_CONFIG" != "no"; then
+	KRB5_LIBS="`${KRB5_CONFIG} --libs gssapi`"
+	KRB5_CFLAGS="`${KRB5_CONFIG} --cflags gssapi`"
+	AC_SUBST(KRB5_CFLAGS)
+	AC_SUBST(KRB5_LIBS)
+	if test "$KRB5_CONFIG" != none; then
+	    AC_DEFINE(LIBSOUP_HAVE_GSSAPI, 1, [Whether or not GSSAPI libs are available])
+	fi
+    else
+	if test "$with_gssapi" = "yes"; then
+	    AC_MSG_ERROR([GSSAPI support requested but failed to found krb5-config. Try to set KRB5_CONFIG.])
+	fi
+    fi
+fi
+
 dnl ****************************************************
 dnl *** Warnings to show if using GCC                ***
 dnl *** (do this last so -Werror won't mess up tests ***
@@ -332,6 +371,39 @@ if test "$GCC" = "yes" -a "$set_more_warnings" != "no"; then
 		-Werror=declaration-after-statement"
 fi
 
+##################################################
+# Visibility handling
+##################################################
+
+SOUP_HIDDEN_VISIBILITY_CFLAGS=""
+case "$host" in
+    *-*-mingw*)
+        dnl on mingw32 we do -fvisibility=hidden and __declspec(dllexport)
+        AC_DEFINE([_SOUP_EXTERN], [__attribute__((visibility("default"))) __declspec(dllexport) extern],
+                  [defines how to decorate public symbols while building])
+        SOUP_HIDDEN_VISIBILITY_CFLAGS="-fvisibility=hidden"
+        ;;
+    *)
+        dnl on other compilers, check if we can do -fvisibility=hidden
+        SAVED_CFLAGS="${CFLAGS}"
+        CFLAGS="-fvisibility=hidden"
+        AC_MSG_CHECKING([for -fvisibility=hidden compiler flag])
+        AC_TRY_COMPILE([], [int main (void) { return 0; }],
+                       AC_MSG_RESULT(yes)
+                       enable_fvisibility_hidden=yes,
+                       AC_MSG_RESULT(no)
+                       enable_fvisibility_hidden=no)
+        CFLAGS="${SAVED_CFLAGS}"
+
+        AS_IF([test "${enable_fvisibility_hidden}" = "yes"], [
+            AC_DEFINE([_SOUP_EXTERN], [__attribute__((visibility("default"))) extern],
+                      [defines how to decorate public symbols while building])
+            SOUP_HIDDEN_VISIBILITY_CFLAGS="-fvisibility=hidden"
+        ])
+        ;;
+esac
+AC_SUBST(SOUP_HIDDEN_VISIBILITY_CFLAGS)
+
 dnl *************************
 dnl *** Output Everything ***
 dnl *************************
@@ -350,5 +422,14 @@ AC_CONFIG_FILES([
 	docs/Makefile
 	docs/reference/Makefile
 	libsoup/soup-version.h
+	config.h.win32
+	build/win32/Makefile
+	build/win32/vs9/Makefile
+	build/win32/vs9/soup-gen-srcs.vsprops
+	build/win32/vs10/Makefile
+	build/win32/vs10/soup-gen-srcs.props
+	build/win32/vs11/Makefile
+	build/win32/vs12/Makefile
+	build/win32/vs14/Makefile
 	])
 AC_OUTPUT

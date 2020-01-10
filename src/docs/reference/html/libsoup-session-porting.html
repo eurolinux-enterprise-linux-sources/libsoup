@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>libsoup Reference Manual: Porting to the new SoupSession</title>
+<title>Porting to the new SoupSession: libsoup Reference Manual</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch01.html" title="Tutorial">
 <link rel="prev" href="libsoup-request-howto.html" title="libsoup Client SoupRequest API">
 <link rel="next" href="libsoup-server-howto.html" title="libsoup Server Basics">
-<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -98,7 +98,7 @@ has different (and hopefully better) defaults than <a class="link" href="SoupSes
       The new
       <a class="link" href="SoupSession.html#SoupSession--proxy-resolver" title="The “proxy-resolver” property"><span class="type">"proxy-resolver"</span></a>
       property is now initialized to the default
-      <a href="http://library.gnome.org/devel/gio/unstable/GProxyResolver.html"><span class="type">GProxyResolver</span></a>,
+      <a href="https://developer.gnome.org/gio/unstable/GProxyResolver.html"><span class="type">GProxyResolver</span></a>,
       meaning that it will automatically use the user's system proxy
       configuration. This replaces the use of the
       <a class="link" href="SoupProxyResolverDefault.html" title="SoupProxyResolverDefault"><span class="type">SoupProxyResolverDefault</span></a>,
@@ -158,10 +158,10 @@ for each host to "preload" the NTLM authentication:
 <span class="usertype">SoupURI</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">uri</span><span class="symbol">;</span>
 
 <span class="normal">auth_manager </span><span class="symbol">=</span><span class="normal"> </span><span class="function">SOUP_AUTH_MANAGER</span><span class="normal"> </span><span class="symbol">(</span><span class="function"><a href="SoupSession.html#soup-session-get-feature">soup_session_get_feature</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">session</span><span class="symbol">,</span><span class="normal"> <a href="SoupAuthManager.html#SOUP-TYPE-AUTH-MANAGER:CAPS">SOUP_TYPE_AUTH_MANAGER</a></span><span class="symbol">));</span>
-<span class="normal">auth </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="http://library.gnome.org/devel/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-new">g_object_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal"><a href="SoupAuth.html#SOUP-TYPE-AUTH-NTLM:CAPS">SOUP_TYPE_AUTH_NTLM</a></span><span class="symbol">,</span><span class="normal"> NULL</span><span class="symbol">);</span>
+<span class="normal">auth </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-new">g_object_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal"><a href="SoupAuth.html#SOUP-TYPE-AUTH-NTLM:CAPS">SOUP_TYPE_AUTH_NTLM</a></span><span class="symbol">,</span><span class="normal"> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
 <span class="normal">uri </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="SoupURI.html#soup-uri-new">soup_uri_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"http://ntlm-using-host.example.com/"</span><span class="symbol">);</span>
 <span class="function"><a href="SoupAuthManager.html#soup-auth-manager-use-auth">soup_auth_manager_use_auth</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">auth_manager</span><span class="symbol">,</span><span class="normal"> uri</span><span class="symbol">,</span><span class="normal"> auth</span><span class="symbol">);</span>
-<span class="function"><a href="http://library.gnome.org/devel/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">auth</span><span class="symbol">);</span>
+<span class="function"><a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">auth</span><span class="symbol">);</span>
 <span class="function"><a href="SoupURI.html#soup-uri-free">soup_uri_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">auth</span><span class="symbol">);</span></pre></td>
       </tr>
     </tbody>
@@ -197,7 +197,7 @@ like gio with respect to asynchronous I/O.
 In particular, the <a class="link" href="SoupSession.html#SoupSession--async-context" title="The “async-context” property"><span class="type">"async-context"</span></a>
 and <a class="link" href="SoupSession.html#SoupSession--use-thread-context" title="The “use-thread-context” property"><span class="type">"use-thread-context"</span></a>
 properties are now effectively unused, and the session always queues
-asynchronous requests in the <span class="type">GMainContext</span> that was is
+asynchronous requests in the <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a> that was is
 the thread default when the asynchronous operation is started. Session
 bookkeeping tasks (like closing idle connections) happen in the
 context that was thread default when the session was created.
@@ -212,7 +212,6 @@ when you need return to the main loop.
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21</div>
+<hr>Generated by GTK-Doc V1.24</div>
 </body>
 </html>

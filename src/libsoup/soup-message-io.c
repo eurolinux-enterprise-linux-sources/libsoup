@@ -36,6 +36,7 @@ typedef enum {
 	SOUP_MESSAGE_IO_STATE_BODY_START,
 	SOUP_MESSAGE_IO_STATE_BODY,
 	SOUP_MESSAGE_IO_STATE_BODY_DATA,
+	SOUP_MESSAGE_IO_STATE_BODY_FLUSH,
 	SOUP_MESSAGE_IO_STATE_BODY_DONE,
 	SOUP_MESSAGE_IO_STATE_FINISHING,
 	SOUP_MESSAGE_IO_STATE_DONE
@@ -124,6 +125,12 @@ soup_message_io_cleanup (SoupMessage *msg)
 	if (io->write_chunk)
 		soup_buffer_free (io->write_chunk);
 
+	if (io->async_close_wait) {
+		g_cancellable_cancel (io->async_close_wait);
+		g_clear_object (&io->async_close_wait);
+	}
+	g_clear_error (&io->async_close_error);
+
 	g_slice_free (SoupMessageIOData, io);
 }
 
@@ -156,7 +163,7 @@ soup_message_io_finished (SoupMessage *msg)
 	SoupMessageIOData *io = priv->io_data;
 	SoupMessageCompletionFn completion_cb;
 	gpointer completion_data;
-	gboolean complete;
+	SoupMessageIOCompletion completion;
 
 	if (!io)
 		return;
@@ -164,14 +171,42 @@ soup_message_io_finished (SoupMessage *msg)
 	completion_cb = io->completion_cb;
 	completion_data = io->completion_data;
 
-	complete = (io->read_state >= SOUP_MESSAGE_IO_STATE_FINISHING &&
-		    io->write_state >= SOUP_MESSAGE_IO_STATE_FINISHING);
+	if ((io->read_state >= SOUP_MESSAGE_IO_STATE_FINISHING &&
+	     io->write_state >= SOUP_MESSAGE_IO_STATE_FINISHING))
+		completion = SOUP_MESSAGE_IO_COMPLETE;
+	else
+		completion = SOUP_MESSAGE_IO_INTERRUPTED;
 
 	g_object_ref (msg);
 	soup_message_io_cleanup (msg);
 	if (completion_cb)
-		completion_cb (msg, complete, completion_data);
+		completion_cb (msg, completion, completion_data);
 	g_object_unref (msg);
+}
+
+GIOStream *
+soup_message_io_steal (SoupMessage *msg)
+{
+	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
+	SoupMessageIOData *io = priv->io_data;
+	SoupMessageCompletionFn completion_cb;
+	gpointer completion_data;
+	GIOStream *iostream;
+
+	if (!io || !io->iostream)
+		return NULL;
+
+	iostream = g_object_ref (io->iostream);
+	completion_cb = io->completion_cb;
+	completion_data = io->completion_data;
+
+	g_object_ref (msg);
+	soup_message_io_cleanup (msg);
+	if (completion_cb)
+		completion_cb (msg, SOUP_MESSAGE_IO_STOLEN, completion_data);
+	g_object_unref (msg);
+
+	return iostream;
 }
 
 static gboolean
@@ -360,6 +395,15 @@ io_write (SoupMessage *msg, gboolean blocking,
 
 	switch (io->write_state) {
 	case SOUP_MESSAGE_IO_STATE_HEADERS:
+		if (io->mode == SOUP_MESSAGE_IO_SERVER &&
+		    io->read_state == SOUP_MESSAGE_IO_STATE_BLOCKING &&
+		    msg->status_code == 0) {
+			/* Client requested "Expect: 100-continue", and
+			 * server did not set an error.
+			 */
+			soup_message_set_status (msg, SOUP_STATUS_CONTINUE);
+		}
+
 		if (!io->write_buf->len) {
 			io->get_headers_cb (msg, io->write_buf,
 					    &io->write_encoding,
@@ -398,6 +442,13 @@ io_write (SoupMessage *msg, gboolean blocking,
 			}
 
 			soup_message_wrote_informational (msg);
+
+			/* If this was "101 Switching Protocols", then
+			 * the server probably stole the connection...
+			 */
+			if (io != priv->io_data)
+				return FALSE;
+
 			soup_message_cleanup_response (msg);
 			break;
 		}
@@ -442,7 +493,7 @@ io_write (SoupMessage *msg, gboolean blocking,
 		if (!io->write_length &&
 		    io->write_encoding != SOUP_ENCODING_EOF &&
 		    io->write_encoding != SOUP_ENCODING_CHUNKED) {
-			io->write_state = SOUP_MESSAGE_IO_STATE_BODY_DONE;
+			io->write_state = SOUP_MESSAGE_IO_STATE_BODY_FLUSH;
 			break;
 		}
 
@@ -454,7 +505,7 @@ io_write (SoupMessage *msg, gboolean blocking,
 				return FALSE;
 			}
 			if (!io->write_chunk->length) {
-				io->write_state = SOUP_MESSAGE_IO_STATE_BODY_DONE;
+				io->write_state = SOUP_MESSAGE_IO_STATE_BODY_FLUSH;
 				break;
 			}
 		}
@@ -484,7 +535,7 @@ io_write (SoupMessage *msg, gboolean blocking,
 	case SOUP_MESSAGE_IO_STATE_BODY_DATA:
 		io->written = 0;
 		if (io->write_chunk->length == 0) {
-			io->write_state = SOUP_MESSAGE_IO_STATE_BODY_DONE;
+			io->write_state = SOUP_MESSAGE_IO_STATE_BODY_FLUSH;
 			break;
 		}
 
@@ -500,9 +551,9 @@ io_write (SoupMessage *msg, gboolean blocking,
 		break;
 
 
-	case SOUP_MESSAGE_IO_STATE_BODY_DONE:
+	case SOUP_MESSAGE_IO_STATE_BODY_FLUSH:
 		if (io->body_ostream) {
-			if (blocking) {
+			if (blocking || io->write_encoding != SOUP_ENCODING_CHUNKED) {
 				if (!g_output_stream_close (io->body_ostream, cancellable, error))
 					return FALSE;
 				g_clear_object (&io->body_ostream);
@@ -518,11 +569,13 @@ io_write (SoupMessage *msg, gboolean blocking,
 			}
 		}
 
+		io->write_state = SOUP_MESSAGE_IO_STATE_BODY_DONE;
+		break;
+
+
+	case SOUP_MESSAGE_IO_STATE_BODY_DONE:
 		io->write_state = SOUP_MESSAGE_IO_STATE_FINISHING;
 		soup_message_wrote_body (msg);
-
-		if (io->async_close_wait)
-			return TRUE;
 		break;
 
 
@@ -602,15 +655,22 @@ io_read (SoupMessage *msg, gboolean blocking,
 			 * bail out here rather than parsing encoding, etc
 			 */
 			soup_message_got_informational (msg);
+
+			/* If this was "101 Switching Protocols", then
+			 * the session may have stolen the connection...
+			 */
+			if (io != priv->io_data)
+				return FALSE;
+
 			soup_message_cleanup_response (msg);
 			break;
 		} else if (io->mode == SOUP_MESSAGE_IO_SERVER &&
 			   soup_message_headers_get_expectations (msg->request_headers) & SOUP_EXPECTATION_CONTINUE) {
-			/* The client requested a Continue response. The
-			 * got_headers handler may change this to something
-			 * else though.
+			/* We must return a status code and response
+			 * headers to the client; either an error to
+			 * be set by a got-headers handler below, or
+			 * else %SOUP_STATUS_CONTINUE otherwise.
 			 */
-			soup_message_set_status (msg, SOUP_STATUS_CONTINUE);
 			io->write_state = SOUP_MESSAGE_IO_STATE_HEADERS;
 			io->read_state = SOUP_MESSAGE_IO_STATE_BLOCKING;
 		} else {
@@ -939,14 +999,14 @@ io_run_until (SoupMessage *msg, gboolean blocking,
 		g_propagate_error (error, my_error);
 		g_object_unref (msg);
 		return FALSE;
-	} else if (!io->async_close_wait &&
-		   g_cancellable_set_error_if_cancelled (cancellable, error)) {
-		g_object_unref (msg);
-		return FALSE;
 	} else if (priv->io_data != io) {
 		g_set_error_literal (error, G_IO_ERROR,
 				     G_IO_ERROR_CANCELLED,
 				     _("Operation was cancelled"));
+		g_object_unref (msg);
+		return FALSE;
+	} else if (!io->async_close_wait &&
+		   g_cancellable_set_error_if_cancelled (cancellable, error)) {
 		g_object_unref (msg);
 		return FALSE;
 	}

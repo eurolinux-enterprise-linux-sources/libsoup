@@ -1,0 +1,46 @@
+diff -up libsoup-2.56.0/libsoup/soup-auth-negotiate.c.negotiate-connection-close libsoup-2.56.0/libsoup/soup-auth-negotiate.c
+--- libsoup-2.56.0/libsoup/soup-auth-negotiate.c.negotiate-connection-close	2017-06-20 14:38:57.074528827 +0200
++++ libsoup-2.56.0/libsoup/soup-auth-negotiate.c	2017-06-20 14:40:02.165257249 +0200
+@@ -188,7 +188,29 @@ soup_auth_negotiate_get_connection_autho
+ 	SoupNegotiateConnectionState *conn = state;
+ 	char *header = NULL;
+ 
+-	if (conn->state == SOUP_NEGOTIATE_RECEIVED_CHALLENGE) {
++	if (conn->state == SOUP_NEGOTIATE_NEW) {
++		GError *err = NULL;
++
++		if (!check_auth_trusted_uri (auth, msg)) {
++			conn->state = SOUP_NEGOTIATE_FAILED;
++			return NULL;
++		}
++
++		if (!soup_gss_build_response (conn, SOUP_AUTH (auth), &err)) {
++			/* FIXME: report further upward via
++			 * soup_message_get_error_message  */
++			if (conn->initialized)
++				g_warning ("gssapi step failed: %s", err ? err->message : "Unknown error");
++			else
++				g_warning ("gssapi init failed: %s", err ? err->message : "Unknown error");
++			conn->state = SOUP_NEGOTIATE_FAILED;
++			g_clear_error (&err);
++
++			return NULL;
++		}
++	}
++
++	if (conn->response_header) {
+ 		header = conn->response_header;
+ 		conn->response_header = NULL;
+ 		conn->state = SOUP_NEGOTIATE_SENT_RESPONSE;
+@@ -251,7 +273,10 @@ soup_auth_negotiate_update_connection (S
+ 		} else {
+ 			/* FIXME: report further upward via
+ 			 * soup_message_get_error_message  */
+-			g_warning ("gssapi step failed: %s", err ? err->message : "Unknown error");
++			if (conn->initialized)
++				g_warning ("gssapi step failed: %s", err ? err->message : "Unknown error");
++			else
++				g_warning ("gssapi init failed: %s", err ? err->message : "Unknown error");
+ 			success = FALSE;
+ 		}
+ 	} else if (!strncmp (header, "Negotiate ", 10)) {

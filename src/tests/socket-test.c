@@ -76,7 +76,10 @@ do_unconnected_socket_test (void)
 
 	/* listening socket fails with ENOTCONN */
 	g_test_expect_message ("libsoup", G_LOG_LEVEL_WARNING,
-			       "*endpoint is not connected*");
+			       /* We can't check the error message since it comes from
+				* libc and is locale-dependent.
+				*/
+			       "*");
 	addr = soup_socket_get_remote_address (sock);
 	g_test_assert_expected_messages ();
 	g_assert_null (addr);
@@ -84,6 +87,7 @@ do_unconnected_socket_test (void)
 	soup_socket_disconnect (sock);
 
 	g_test_expect_message ("libsoup", G_LOG_LEVEL_WARNING,
+			       /* This error message comes from soup-socket.c though */
 			       "*socket not connected*");
 	addr = soup_socket_get_remote_address (sock);
 	g_test_assert_expected_messages ();
@@ -120,7 +124,6 @@ do_socket_from_fd_client_test (void)
 	SoupAddress *local, *remote;
 	GSocketAddress *gaddr;
 	gboolean is_server;
-	int type;
 	GError *error = NULL;
 
 	server = soup_test_server_new (SOUP_TEST_SERVER_DEFAULT);
@@ -143,7 +146,6 @@ do_socket_from_fd_client_test (void)
 
 	sock = g_initable_new (SOUP_TYPE_SOCKET, NULL, &error,
 			       SOUP_SOCKET_FD, g_socket_get_fd (gsock),
-			       SOUP_SOCKET_CLOSE_ON_DISPOSE, FALSE,
 			       NULL);
 	g_assert_no_error (error);
 	g_assert_nonnull (sock);
@@ -167,13 +169,10 @@ do_socket_from_fd_client_test (void)
 	g_object_unref (gaddr);
 
 	g_object_unref (sock);
-	/* We specified close-on-dispose=FALSE */
-	g_socket_get_option (gsock, SOL_SOCKET, SO_TYPE, &type, &error);
-	g_assert_no_error (error);
-
 	g_object_unref (gsock);
 
-	g_object_unref (server);
+	soup_test_server_quit_unref (server);
+	soup_uri_free (uri);
 }
 
 static void
@@ -220,6 +219,7 @@ do_socket_from_fd_server_test (void)
 	g_assert_cmpstr (soup_address_get_physical (local), ==, "127.0.0.1");
 	g_assert_cmpint (soup_address_get_port (local), ==, g_inet_socket_address_get_port (G_INET_SOCKET_ADDRESS (gaddr)));
 	g_object_unref (local);
+	g_object_unref (gaddr);
 
 	g_object_unref (sock);
 

@@ -1,6 +1,8 @@
 ## Process this file with automake to produce Makefile.in
 
 EXTRA_DIST =
+CLEANFILES =
+
 
 include $(GLIB_MAKEFILE)
 
@@ -8,15 +10,21 @@ if OS_WIN32
 LIBWS2_32 = -lws2_32
 endif
 
+SOUP_COMMON_CPPFLAGS =			\
+	-DG_LOG_DOMAIN=\"libsoup\"	\
+	-DLIBSOUP_COMPILATION
+
 AM_CPPFLAGS = 				\
-	-DG_LOG_DOMAIN=\"libsoup\" 	\
+	$(SOUP_COMMON_CPPFLAGS)		\
 	-DLOCALEDIR=\"$(localedir)\"	\
 	-I$(top_srcdir)			\
 	-I$(top_builddir)		\
 	$(SOUP_DEBUG_FLAGS)		\
 	$(GLIB_CFLAGS)			\
 	$(XML_CFLAGS)			\
-	$(SQLITE_CFLAGS)
+	$(SQLITE_CFLAGS)		\
+	$(CODE_COVERAGE_CFLAGS)		\
+	$(KRB5_CFLAGS)
 
 libsoupincludedir = $(includedir)/libsoup-2.4/libsoup
 
@@ -28,6 +36,7 @@ soup_headers =			\
 	soup-auth-domain-basic.h  \
 	soup-auth-domain-digest.h \
 	soup-auth-manager.h	\
+	soup-autocleanups.h	\
 	soup-cache.h		\
 	soup-content-decoder.h	\
 	soup-content-sniffer.h	\
@@ -67,7 +76,10 @@ soup_headers =			\
 	soup-types.h		\
 	soup-uri.h		\
 	soup-value-utils.h	\
-	soup-xmlrpc.h
+	soup-websocket.h	\
+	soup-websocket-connection.h	\
+	soup-xmlrpc.h		\
+	soup-xmlrpc-old.h
 
 libsoupinclude_HEADERS =	\
 	$(soup_headers)		\
@@ -78,20 +90,23 @@ nodist_libsoupinclude_HEADERS =	\
 
 lib_LTLIBRARIES = libsoup-2.4.la
 
+libsoup_2_4_la_CFLAGS = $(AM_CFLAGS) $(SOUP_HIDDEN_VISIBILITY_CFLAGS)
+
 libsoup_2_4_la_LDFLAGS =	\
 	-version-info $(SOUP_CURRENT):$(SOUP_REVISION):$(SOUP_AGE) \
 	-no-undefined \
-	-export-symbols $(srcdir)/libsoup-2.4.sym
-
-EXTRA_DIST += libsoup-2.4.sym
+	-export-dynamic \
+	$(CODE_COVERAGE_LDFLAGS)
 
 libsoup_2_4_la_LIBADD =			\
 	$(GLIB_LIBS)			\
 	$(LIBWS2_32)			\
 	$(XML_LIBS)			\
-	$(SQLITE_LIBS)
+	$(SQLITE_LIBS)			\
+	$(KRB5_LIBS)
 
 libsoup_2_4_la_SOURCES =		\
+	gconstructor.h			\
 	soup-address.c			\
 	soup-auth.c			\
 	soup-auth-basic.h		\
@@ -100,6 +115,8 @@ libsoup_2_4_la_SOURCES =		\
 	soup-auth-digest.c		\
 	soup-auth-ntlm.h		\
 	soup-auth-ntlm.c		\
+	soup-auth-negotiate.h		\
+	soup-auth-negotiate.c		\
 	soup-auth-domain.c		\
 	soup-auth-domain-basic.c	\
 	soup-auth-domain-digest.c	\
@@ -109,6 +126,8 @@ libsoup_2_4_la_SOURCES =		\
 	soup-body-output-stream.h	\
 	soup-body-output-stream.c	\
 	soup-cache.c			\
+	soup-cache-client-input-stream.h\
+	soup-cache-client-input-stream.c\
 	soup-cache-input-stream.h	\
 	soup-cache-input-stream.c	\
 	soup-cache-private.h		\
@@ -139,6 +158,7 @@ libsoup_2_4_la_SOURCES =		\
 	soup-filter-input-stream.h	\
 	soup-form.c			\
 	soup-headers.c			\
+	soup-init.c			\
 	soup-io-stream.h		\
 	soup-io-stream.c		\
 	soup-logger.c			\
@@ -184,7 +204,10 @@ libsoup_2_4_la_SOURCES =		\
 	soup-uri.c			\
 	soup-value-utils.c		\
 	soup-version.c			\
-	soup-xmlrpc.c
+	soup-websocket.c		\
+	soup-websocket-connection.c	\
+	soup-xmlrpc.c			\
+	soup-xmlrpc-old.c
 
 # TLD rules
 EXTRA_DIST += tld-parser.py
@@ -205,12 +228,12 @@ libsoupgnomeinclude_HEADERS =	\
 
 lib_LTLIBRARIES += libsoup-gnome-2.4.la
 
+libsoup_gnome_2_4_la_CFLAGS = $(AM_CFLAGS) $(SOUP_HIDDEN_VISIBILITY_CFLAGS)
+
 libsoup_gnome_2_4_la_LDFLAGS =	\
 	-version-info $(SOUP_CURRENT):$(SOUP_REVISION):$(SOUP_AGE) \
 	-no-undefined \
-	-export-symbols $(srcdir)/libsoup-gnome-2.4.sym
-
-EXTRA_DIST += libsoup-gnome-2.4.sym
+	-export-dynamic
 
 libsoup_gnome_2_4_la_LIBADD =		\
 	libsoup-2.4.la			\
@@ -233,6 +256,7 @@ BUILT_SOURCES = \
 
 soup_enum_types_sources = $(libsoupinclude_HEADERS) $(libsoupgnomeinclude_HEADERS)
 soup_enum_types_MKENUMS_C_FLAGS = --fhead "\#define LIBSOUP_USE_UNSTABLE_REQUEST_API"
+soup_enum_types_MKENUMS_H_FLAGS = --fhead "\#include <libsoup/soup-version.h>\n\#define GLIB_MKENUMS_EXTERN _SOUP_EXTERN\n"
 
 #
 # Introspection support
@@ -244,15 +268,17 @@ INTROSPECTION_COMPILER_ARGS = --includedir=.
 
 if HAVE_INTROSPECTION
 
+SOUP_UNSTABLE_REQUEST_CFLAG = -DLIBSOUP_USE_UNSTABLE_REQUEST_API
+
 # Core library
 gi_soup_files = \
 	$(filter-out soup.h soup-enum-types.% soup-proxy-resolver.h,\
 	   $(soup_headers) $(filter-out %.h, $(libsoup_2_4_la_SOURCES)))
-gi_built_soup_files = soup-enum-types.h
+gi_built_soup_files = soup-enum-types.h soup-version.h
 
 Soup-2.4.gir: libsoup-2.4.la
 Soup_2_4_gir_INCLUDES = Gio-2.0
-Soup_2_4_gir_CFLAGS = $(AM_CPPFLAGS) -DLIBSOUP_USE_UNSTABLE_REQUEST_API
+Soup_2_4_gir_CFLAGS = $(AM_CPPFLAGS) $(SOUP_UNSTABLE_REQUEST_CFLAG)
 Soup_2_4_gir_LIBS = libsoup-2.4.la
 Soup_2_4_gir_EXPORT_PACKAGES = libsoup-2.4
 Soup_2_4_gir_SCANNERFLAGS = --c-include "libsoup/soup.h"
@@ -265,7 +291,22 @@ Soup_2_4_gir_FILES = \
 
 INTROSPECTION_GIRS += Soup-2.4.gir
 
+if ENABLE_VAPIGEN
+libsoup-2.4.vapi: Soup-2.4.gir Soup-2.4.metadata Soup-2.4-custom.vala
+	$(VAPIGEN) --metadatadir=$(top_srcdir)/libsoup --pkg gio-2.0 --library=libsoup-2.4 $^
+
+vapidir=$(VAPIDIR)
+vapi_DATA=libsoup-2.4.vapi libsoup-2.4.deps
+CLEANFILES += libsoup-2.4.vapi
+endif
+
+EXTRA_DIST += Soup-2.4.metadata Soup-2.4-custom.vala libsoup-2.4.deps
+
 if BUILD_LIBSOUP_GNOME
+
+SOUPGNOME_GIR_SCANNER_BASE_FLAGS =	\
+	--identifier-prefix=Soup	\
+	--symbol-prefix=soup
 
 # GNOME extensions
 gi_soup_gnome_files = $(filter-out soup-gnome.h,\
@@ -273,8 +314,7 @@ gi_soup_gnome_files = $(filter-out soup-gnome.h,\
 	                  $(filter-out %.h, $(libsoup_gnome_2_4_la_SOURCES)))
 SoupGNOME-2.4.gir: libsoup-gnome-2.4.la Soup-2.4.gir
 SoupGNOME_2_4_gir_SCANNERFLAGS =			\
-	--identifier-prefix=Soup			\
-	--symbol-prefix=soup				\
+	$(SOUPGNOME_GIR_SCANNER_BASE_FLAGS)		\
 	--c-include "libsoup/soup-gnome.h"		\
 	--include-uninstalled=$(builddir)/Soup-2.4.gir
 SoupGNOME_2_4_gir_CFLAGS = $(AM_CPPFLAGS)
@@ -292,18 +332,75 @@ gir_DATA = $(INTROSPECTION_GIRS)
 typelibdir = $(libdir)/girepository-1.0
 typelib_DATA = $(INTROSPECTION_GIRS:.gir=.typelib)
 
-CLEANFILES = $(gir_DATA) $(typelib_DATA) $(BUILT_SOURCES)
+CLEANFILES+= $(gir_DATA) $(typelib_DATA) $(BUILT_SOURCES)
 
 endif
 
-# We only do this check on Linux, so we don't have to worry about
-# different "nm" output on other platforms
-if OS_LINUX
-check-local:
-	@echo Checking libsoup-2.4.so symbols
-	@nm $(builddir)/.libs/libsoup-2.4.so | \
-		grep "^[[:xdigit:]]\+ [BTR] " | \
-		sed "s/^[[:xdigit:]]\+ [BTR] //" | \
-		env LANG=C sort -u | \
-		diff -U0 $(srcdir)/libsoup-2.4.sym - >&2
+# ------ MSVC Project File Generation ------
+MSVCPROJS = soup soup-gnome
+
+soup_FILES = $(libsoup_2_4_la_SOURCES)
+soup_EXCLUDES = dummy
+
+soup_HEADERS_DIR = $(libsoupincludedir)
+soup_HEADERS_INST = $(libsoupinclude_HEADERS) $(nodist_libsoupinclude_HEADERS)
+soup_HEADERS_EXCLUDES = dummy
+
+soup_gnome_FILES = $(libsoup_gnome_2_4_la_SOURCES)
+soup_gnome_EXCLUDES = dummy
+
+soup_gnome_HEADERS_DIR = $(libsoupgnomeincludedir)
+soup_gnome_HEADERS_INST = $(libsoupgnomeinclude_HEADERS)
+soup_gnome_HEADERS_EXCLUDES = dummy
+
+include $(top_srcdir)/build/Makefile.msvcproj
+
+if HAVE_INTROSPECTION
+# Introspection Items for MSVC
+MSVC_INTROSPECT_GIRS = Soup-2.4.gir
+if BUILD_LIBSOUP_GNOME
+MSVC_INTROSPECT_GIRS += SoupGNOME-2.4.gir
 endif
+
+BASE_MSVC_GIR_CFLAGS =		\
+	$(SOUP_COMMON_CPPFLAGS)	\
+	-I../..
+
+INTROSPECTION_INTERMEDIATE_ITEMS = 					\
+	$(top_builddir)/build/win32/Soup-2.4.gir.msvc.introspect	\
+	$(top_builddir)/build/win32/Soup_2_4_gir_list			\
+	$(top_builddir)/build/win32/SoupGNOME-2.4.gir.msvc.introspect	\
+	$(top_builddir)/build/win32/SoupGNOME_2_4_gir_list
+
+# libsoup
+Soup_2_4_gir_MSVC_FILES = $(gi_soup_files) $(gi_built_soup_files)
+Soup_2_4_gir_MSVC_EXPORT_PACKAGES = $(Soup_2_4_gir_EXPORT_PACKAGES)
+Soup_2_4_gir_MSVC_INCLUDE_GIRS = $(Soup_2_4_gir_INCLUDES)
+Soup_2_4_gir_MSVC_LIBS = soup-2.4
+Soup_2_4_gir_MSVC_CFLAGS =  $(BASE_MSVC_GIR_CFLAGS) $(SOUP_UNSTABLE_REQUEST_CFLAG)
+Soup_2_4_gir_MSVC_SCANNERFLAGS = --c-include \"libsoup/soup.h\"
+
+if BUILD_LIBSOUP_GNOME
+# libsoup-gnome
+SoupGNOME_2_4_gir_MSVC_FILES = $(gi_soup_gnome_files)
+SoupGNOME_2_4_gir_MSVC_GIR_DEPS = Soup-2.4.gir
+SoupGNOME_2_4_gir_MSVC_EXPORT_PACKAGES = $(SoupGNOME_2_4_gir_EXPORT_PACKAGES)
+SoupGNOME_2_4_gir_MSVC_LIBS = soup-gnome-2.4 soup-2.4
+SoupGNOME_2_4_gir_MSVC_CFLAGS = $(BASE_MSVC_GIR_CFLAGS)
+SoupGNOME_2_4_gir_MSVC_SCANNERFLAGS =	i	\
+	$(SOUPGNOME_GIR_SCANNER_BASE_FLAGS)	\
+	 --c-include \"libsoup/soup-gnome.h\"	\
+	--include-uninstalled=./Soup-2.4.gir
+endif
+
+include $(top_srcdir)/build/Makefile.msvc-introspection
+else
+INTROSPECTION_INTERMEDIATE_ITEMS =
+endif
+
+dist-hook: \
+	$(top_builddir)/build/win32/vs9/soup.vcproj		\
+	$(top_builddir)/build/win32/vs9/soup.headers		\
+	$(top_builddir)/build/win32/vs9/soup-gnome.vcproj	\
+	$(top_builddir)/build/win32/vs9/soup-gnome.headers	\
+	$(INTROSPECTION_INTERMEDIATE_ITEMS)

@@ -9,9 +9,9 @@
 #include "soup-socket.h"
 
 #define SOUP_SOCKET_SOCKET_PROPERTIES "socket-properties"
-#define SOUP_SOCKET_CLOSE_ON_DISPOSE  "close-on-dispose"
 #define SOUP_SOCKET_FD                "fd"
 #define SOUP_SOCKET_GSOCKET           "gsocket"
+#define SOUP_SOCKET_IOSTREAM          "iostream"
 #define SOUP_SOCKET_IPV6_ONLY         "ipv6-only"
 
 gboolean   soup_socket_connect_sync_internal   (SoupSocket           *sock,
@@ -38,11 +38,17 @@ gboolean   soup_socket_handshake_finish        (SoupSocket           *sock,
 						GAsyncResult         *result,
 						GError              **error);
 
+gboolean   soup_socket_is_readable             (SoupSocket           *sock);
 GSocket   *soup_socket_get_gsocket             (SoupSocket           *sock);
+GSocket   *soup_socket_steal_gsocket           (SoupSocket           *sock);
 GIOStream *soup_socket_get_connection          (SoupSocket           *sock);
 GIOStream *soup_socket_get_iostream            (SoupSocket           *sock);
 
 SoupURI   *soup_socket_get_http_proxy_uri      (SoupSocket           *sock);
+
+gboolean   soup_socket_listen_full             (SoupSocket           *sock,
+                                                GError              **error);
+
 
 
 typedef struct {

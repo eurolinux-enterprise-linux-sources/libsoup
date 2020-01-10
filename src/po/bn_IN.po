@@ -13,7 +13,7 @@ msgstr ""
 "PO-Revision-Date: 2014-10-07 13:28+0000\n"
 "Last-Translator: \n"
 "Language-Team: Bengali (India) <kde-i18n-doc@kde.org>\n"
-"Language: bn-IN\n"
+"Language: bn_IN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -83,8 +83,8 @@ msgstr "একটি TLS সার্টিফিকেট ছাড়া এক�
 
 #: ../libsoup/soup-server.c:1547
 #, c-format
-msgid "Could not listen on address %s, port %d"
-msgstr "ঠিকানা %s, পোর্ট %d এ শোনা যায়নি"
+msgid "Could not listen on address %s, port %d: "
+msgstr "ঠিকানা %s, পোর্ট %d এ শোনা যায়নি: "
 
 #: ../libsoup/soup-session.c:4466
 #, c-format

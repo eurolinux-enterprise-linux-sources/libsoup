@@ -190,7 +190,7 @@ soup_auth_manager_remove_feature (SoupSessionFeature *feature, GType type)
 {
 	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER (feature)->priv;
 	SoupAuthClass *auth_class;
-	int i;
+	guint i;
 
 	if (!g_type_is_a (type, SOUP_TYPE_AUTH))
 		return FALSE;
@@ -215,7 +215,7 @@ soup_auth_manager_has_feature (SoupSessionFeature *feature, GType type)
 {
 	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER (feature)->priv;
 	SoupAuthClass *auth_class;
-	int i;
+	guint i;
 
 	if (!g_type_is_a (type, SOUP_TYPE_AUTH))
 		return FALSE;
@@ -468,18 +468,21 @@ authenticate_auth (SoupAuthManager *manager, SoupAuth *auth,
 	SoupAuthManagerPrivate *priv = manager->priv;
 	SoupURI *uri;
 
+	if (!soup_auth_can_authenticate (auth))
+		return;
+
 	if (proxy) {
 		SoupMessageQueue *queue;
 		SoupMessageQueueItem *item;
 
 		queue = soup_session_get_queue (priv->session);
 		item = soup_message_queue_lookup (queue, msg);
-		if (item) {
-			uri = soup_connection_get_proxy_uri (item->conn);
-			soup_message_queue_item_unref (item);
-		} else
-			uri = NULL;
+		if (!item)
+			return;
 
+		/* When loaded from the disk cache, the connection is NULL. */
+		uri = item->conn ? soup_connection_get_proxy_uri (item->conn) : NULL;
+		soup_message_queue_item_unref (item);
 		if (!uri)
 			return;
 	} else
@@ -647,33 +650,9 @@ proxy_auth_got_body (SoupMessage *msg, gpointer manager)
 }
 
 static void
-soup_auth_manager_request_queued (SoupSessionFeature *manager,
-				  SoupSession *session,
-				  SoupMessage *msg)
+auth_msg_starting (SoupMessage *msg, gpointer manager)
 {
-	soup_message_add_status_code_handler (
-		msg, "got_headers", SOUP_STATUS_UNAUTHORIZED,
-		G_CALLBACK (auth_got_headers), manager);
-	soup_message_add_status_code_handler (
-		msg, "got_body", SOUP_STATUS_UNAUTHORIZED,
-		G_CALLBACK (auth_got_body), manager);
-
-	soup_message_add_status_code_handler (
-		msg, "got_headers", SOUP_STATUS_PROXY_UNAUTHORIZED,
-		G_CALLBACK (proxy_auth_got_headers), manager);
-	soup_message_add_status_code_handler (
-		msg, "got_body", SOUP_STATUS_PROXY_UNAUTHORIZED,
-		G_CALLBACK (proxy_auth_got_body), manager);
-}
-
-static void
-soup_auth_manager_request_started (SoupSessionFeature *feature,
-				   SoupSession *session,
-				   SoupMessage *msg,
-				   SoupSocket *socket)
-{
-	SoupAuthManager *manager = SOUP_AUTH_MANAGER (feature);
-	SoupAuthManagerPrivate *priv = manager->priv;
+	SoupAuthManagerPrivate *priv = SOUP_AUTH_MANAGER (manager)->priv;
 	SoupAuth *auth;
 
 	g_mutex_lock (&priv->lock);
@@ -697,6 +676,29 @@ soup_auth_manager_request_started (SoupSessionFeature *feature,
 	soup_message_set_proxy_auth (msg, auth);
 
 	g_mutex_unlock (&priv->lock);
+}
+
+static void
+soup_auth_manager_request_queued (SoupSessionFeature *manager,
+				  SoupSession *session,
+				  SoupMessage *msg)
+{
+	g_signal_connect (msg, "starting",
+			  G_CALLBACK (auth_msg_starting), manager);
+
+	soup_message_add_status_code_handler (
+		msg, "got_headers", SOUP_STATUS_UNAUTHORIZED,
+		G_CALLBACK (auth_got_headers), manager);
+	soup_message_add_status_code_handler (
+		msg, "got_body", SOUP_STATUS_UNAUTHORIZED,
+		G_CALLBACK (auth_got_body), manager);
+
+	soup_message_add_status_code_handler (
+		msg, "got_headers", SOUP_STATUS_PROXY_UNAUTHORIZED,
+		G_CALLBACK (proxy_auth_got_headers), manager);
+	soup_message_add_status_code_handler (
+		msg, "got_body", SOUP_STATUS_PROXY_UNAUTHORIZED,
+		G_CALLBACK (proxy_auth_got_body), manager);
 }
 
 static void
@@ -747,7 +749,6 @@ soup_auth_manager_session_feature_init (SoupSessionFeatureInterface *feature_int
 
 	feature_interface->attach = soup_auth_manager_attach;
 	feature_interface->request_queued = soup_auth_manager_request_queued;
-	feature_interface->request_started = soup_auth_manager_request_started;
 	feature_interface->request_unqueued = soup_auth_manager_request_unqueued;
 	feature_interface->add_feature = soup_auth_manager_add_feature;
 	feature_interface->remove_feature = soup_auth_manager_remove_feature;

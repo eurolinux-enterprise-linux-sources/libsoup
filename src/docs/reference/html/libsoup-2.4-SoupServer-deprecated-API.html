@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>libsoup Reference Manual: SoupServer deprecated API</title>
+<title>SoupServer deprecated API: libsoup Reference Manual</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch02.html" title="Core API">
 <link rel="prev" href="SoupServer.html" title="SoupServer">
 <link rel="next" href="SoupSession.html" title="SoupSession">
-<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -41,7 +41,7 @@
 <tbody>
 <tr>
 <td class="function_type">
-<span class="returnvalue">guint</span>
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="libsoup-2.4-SoupServer-deprecated-API.html#soup-server-get-port" title="soup_server_get_port ()">soup_server_get_port</a> <span class="c_punctuation">()</span>
@@ -81,7 +81,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">GMainContext</span> *
+<a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="returnvalue">GMainContext</span></a> *
 </td>
 <td class="function_name">
 <a class="link" href="libsoup-2.4-SoupServer-deprecated-API.html#soup-server-get-async-context" title="soup_server_get_async_context ()">soup_server_get_async_context</a> <span class="c_punctuation">()</span>
@@ -144,14 +144,12 @@
 </div>
 <div class="refsect1">
 <a name="libsoup-2.4-SoupServer-deprecated-API.description"></a><h2>Description</h2>
-<p>
-</p>
 </div>
 <div class="refsect1">
 <a name="libsoup-2.4-SoupServer-deprecated-API.functions_details"></a><h2>Functions</h2>
 <div class="refsect2">
 <a name="soup-server-get-port"></a><h3>soup_server_get_port ()</h3>
-<pre class="programlisting"><span class="returnvalue">guint</span>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
 soup_server_get_port (<em class="parameter"><code><a class="link" href="SoupServer.html" title="SoupServer"><span class="type">SoupServer</span></a> *server</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">soup_server_get_port</code> is deprecated and should not be used in newly-written code.</p>
@@ -180,7 +178,6 @@ the old API.</p>
 <a name="id-1.3.20.7.2.7"></a><h4>Returns</h4>
 <p> the port <em class="parameter"><code>server</code></em>
 is listening on.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -191,8 +188,8 @@ soup_server_get_listener (<em class="parameter"><code><a class="link" href="Soup
 <div class="warning">
 <p><code class="literal">soup_server_get_listener</code> is deprecated and should not be used in newly-written code.</p>
 <p>If you are using <a class="link" href="SoupServer.html#soup-server-listen" title="soup_server_listen ()"><code class="function">soup_server_listen()</code></a>, etc, then use
-<a href="libsoup-2.4-SoupServer-deprecated-API.html#soup-server-get-listener"><code class="function">soup_server_get_listeners()</code></a> to get a list of all listening sockets,
-but note that that function returns <a href="http://library.gnome.org/devel/gio/unstable/GSocket.html"><span class="type">GSockets</span></a>, not <a href="SoupSocket.html"><span class="type">SoupSockets</span></a>.</p>
+<a class="link" href="SoupServer.html#soup-server-get-listeners" title="soup_server_get_listeners ()"><code class="function">soup_server_get_listeners()</code></a> to get a list of all listening sockets,
+but note that that function returns <a href="https://developer.gnome.org/gio/unstable/GSocket.html"><span class="type">GSockets</span></a>, not <a href="SoupSocket.html"><span class="type">SoupSockets</span></a>.</p>
 </div>
 <p>Gets <em class="parameter"><code>server</code></em>
 's listening socket, if you are using the old API.</p>
@@ -229,12 +226,12 @@ soup_server_run (<em class="parameter"><code><a class="link" href="SoupServer.ht
 <p><code class="literal">soup_server_run</code> is deprecated and should not be used in newly-written code.</p>
 <p>When using <a class="link" href="SoupServer.html#soup-server-listen" title="soup_server_listen ()"><code class="function">soup_server_listen()</code></a>, etc, the server will
 always listen for connections, and will process them whenever the
-thread-default <span class="type">GMainContext</span> is running.</p>
+thread-default <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a> is running.</p>
 </div>
 <p>Starts <em class="parameter"><code>server</code></em>
 , if you are using the old API, causing it to listen
 for and process incoming connections. Unlike
-<a class="link" href="libsoup-2.4-SoupServer-deprecated-API.html#soup-server-run-async" title="soup_server_run_async ()"><code class="function">soup_server_run_async()</code></a>, this creates a <span class="type">GMainLoop</span> and runs it, and
+<a class="link" href="libsoup-2.4-SoupServer-deprecated-API.html#soup-server-run-async" title="soup_server_run_async ()"><code class="function">soup_server_run_async()</code></a>, this creates a <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainLoop"><span class="type">GMainLoop</span></a> and runs it, and
 it will not return until someone calls <a class="link" href="libsoup-2.4-SoupServer-deprecated-API.html#soup-server-quit" title="soup_server_quit ()"><code class="function">soup_server_quit()</code></a> to stop
 the server.</p>
 <div class="refsect3">
@@ -262,13 +259,13 @@ soup_server_run_async (<em class="parameter"><code><a class="link" href="SoupSer
 <p><code class="literal">soup_server_run_async</code> is deprecated and should not be used in newly-written code.</p>
 <p>When using <a class="link" href="SoupServer.html#soup-server-listen" title="soup_server_listen ()"><code class="function">soup_server_listen()</code></a>, etc, the server will
 always listen for connections, and will process them whenever the
-thread-default <span class="type">GMainContext</span> is running.</p>
+thread-default <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a> is running.</p>
 </div>
 <p>Starts <em class="parameter"><code>server</code></em>
 , if you are using the old API, causing it to listen
 for and process incoming connections.</p>
 <p>The server runs in <em class="parameter"><code>server</code></em>
-'s <span class="type">GMainContext</span>. It will not actually
+'s <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a>. It will not actually
 perform any processing unless the appropriate main loop is running.
 In the simple case where you did not set the server's
 <a class="link" href="libsoup-2.4-SoupServer-deprecated-API.html#SOUP-SERVER-ASYNC-CONTEXT:CAPS" title="SOUP_SERVER_ASYNC_CONTEXT"><code class="literal">SOUP_SERVER_ASYNC_CONTEXT</code></a> property, this means the server will run
@@ -298,7 +295,7 @@ soup_server_quit (<em class="parameter"><code><a class="link" href="SoupServer.h
 <p><code class="literal">soup_server_quit</code> is deprecated and should not be used in newly-written code.</p>
 <p>When using <a class="link" href="SoupServer.html#soup-server-listen" title="soup_server_listen ()"><code class="function">soup_server_listen()</code></a>, etc, the server will
 always listen for connections, and will process them whenever the
-thread-default <span class="type">GMainContext</span> is running.</p>
+thread-default <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a> is running.</p>
 </div>
 <p>Stops processing for <em class="parameter"><code>server</code></em>
 , if you are using the old API. Call
@@ -329,18 +326,18 @@ and stop a server as many times as you want.</p>
 <hr>
 <div class="refsect2">
 <a name="soup-server-get-async-context"></a><h3>soup_server_get_async_context ()</h3>
-<pre class="programlisting"><span class="returnvalue">GMainContext</span> *
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="returnvalue">GMainContext</span></a> *
 soup_server_get_async_context (<em class="parameter"><code><a class="link" href="SoupServer.html" title="SoupServer"><span class="type">SoupServer</span></a> *server</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">soup_server_get_async_context</code> is deprecated and should not be used in newly-written code.</p>
 <p>If you are using <a class="link" href="SoupServer.html#soup-server-listen" title="soup_server_listen ()"><code class="function">soup_server_listen()</code></a>, etc, then
-the server listens on the thread-default <span class="type">GMainContext</span>, and this
+the server listens on the thread-default <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a>, and this
 property is ignored.</p>
 </div>
 <p>Gets <em class="parameter"><code>server</code></em>
 's async_context, if you are using the old API. (With
 the new API, the server runs in the thread's thread-default
-<span class="type">GMainContext</span>, regardless of what this method returns.)</p>
+<a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a>, regardless of what this method returns.)</p>
 <p>This does not add a ref to the context, so you will need to ref it
 yourself if you want it to outlive its server.</p>
 <div class="refsect3">
@@ -361,8 +358,8 @@ yourself if you want it to outlive its server.</p>
 <div class="refsect3">
 <a name="id-1.3.20.7.7.8"></a><h4>Returns</h4>
 <p> <em class="parameter"><code>server</code></em>
-'s <span class="type">GMainContext</span>,
-which may be <code class="literal">NULL</code>. </p>
+'s <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a>,
+which may be <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p>
 <p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
@@ -374,7 +371,7 @@ soup_client_context_get_socket (<em class="parameter"><code><a class="link" href
 <div class="warning">
 <p><code class="literal">soup_client_context_get_socket</code> is deprecated and should not be used in newly-written code.</p>
 <p>use <a class="link" href="SoupServer.html#soup-client-context-get-gsocket" title="soup_client_context_get_gsocket ()"><code class="function">soup_client_context_get_gsocket()</code></a>, which returns
-a <a href="http://library.gnome.org/devel/gio/unstable/GSocket.html"><span class="type">GSocket</span></a>.</p>
+a <a href="https://developer.gnome.org/gio/unstable/GSocket.html"><span class="type">GSocket</span></a>.</p>
 </div>
 <p>Retrieves the <a class="link" href="SoupSocket.html" title="SoupSocket"><span class="type">SoupSocket</span></a> that <em class="parameter"><code>client</code></em>
  is associated with.</p>
@@ -416,7 +413,7 @@ soup_client_context_get_address (<em class="parameter"><code><a class="link" hre
 <div class="warning">
 <p><code class="literal">soup_client_context_get_address</code> is deprecated and should not be used in newly-written code.</p>
 <p>Use <a class="link" href="SoupServer.html#soup-client-context-get-remote-address" title="soup_client_context_get_remote_address ()"><code class="function">soup_client_context_get_remote_address()</code></a>, which returns
-a <a href="http://library.gnome.org/devel/gio/unstable/GSocketAddress.html"><span class="type">GSocketAddress</span></a>.</p>
+a <a href="https://developer.gnome.org/gio/unstable/GSocketAddress.html"><span class="type">GSocketAddress</span></a>.</p>
 </div>
 <p>Retrieves the <a class="link" href="SoupAddress.html" title="SoupAddress"><span class="type">SoupAddress</span></a> associated with the remote end
 of a connection.</p>
@@ -437,9 +434,10 @@ of a connection.</p>
 </div>
 <div class="refsect3">
 <a name="id-1.3.20.7.9.7"></a><h4>Returns</h4>
-<p> the <a class="link" href="SoupAddress.html" title="SoupAddress"><span class="type">SoupAddress</span></a> associated with the
-remote end of a connection. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+<p> the <a class="link" href="SoupAddress.html" title="SoupAddress"><span class="type">SoupAddress</span></a>
+associated with the remote end of a connection, it may be
+<a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if you used <a class="link" href="SoupServer.html#soup-server-accept-iostream" title="soup_server_accept_iostream ()"><code class="function">soup_server_accept_iostream()</code></a>. </p>
+<p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 </div>
@@ -503,7 +501,7 @@ are being listened on.</p>
 </pre>
 <div class="warning">
 <p><code class="literal">SOUP_SERVER_ASYNC_CONTEXT</code> is deprecated and should not be used in newly-written code.</p>
-<p>The new API uses the thread-default <span class="type">GMainContext</span>
+<p>The new API uses the thread-default <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a>
 rather than having an explicitly-specified one.</p>
 </div>
 <p>Alias for the deprecated <a class="link" href="SoupServer.html#SoupServer--async-context" title="The “async-context” property"><span class="type">“async-context”</span></a>
@@ -512,7 +510,6 @@ property, qv.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21</div>
+<hr>Generated by GTK-Doc V1.24</div>
 </body>
 </html>

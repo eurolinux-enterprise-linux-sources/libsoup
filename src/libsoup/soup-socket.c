@@ -52,6 +52,7 @@ enum {
 
 	PROP_FD,
 	PROP_GSOCKET,
+	PROP_IOSTREAM,
 	PROP_LOCAL_ADDRESS,
 	PROP_REMOTE_ADDRESS,
 	PROP_NON_BLOCKING,
@@ -66,7 +67,6 @@ enum {
 	PROP_TRUSTED_CERTIFICATE,
 	PROP_TLS_CERTIFICATE,
 	PROP_TLS_ERRORS,
-	PROP_CLOSE_ON_DISPOSE,
 	PROP_SOCKET_PROPERTIES,
 
 	LAST_PROP
@@ -89,7 +89,6 @@ typedef struct {
 	guint ssl_strict:1;
 	guint ssl_fallback:1;
 	guint clean_dispose:1;
-	guint close_on_dispose:1;
 	guint use_thread_context:1;
 	gpointer ssl_creds;
 
@@ -129,6 +128,13 @@ soup_socket_initable_init (GInitable     *initable,
 {
 	SoupSocket *sock = SOUP_SOCKET (initable);
 	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+
+	if (priv->conn) {
+		g_warn_if_fail (priv->gsock == NULL);
+		g_warn_if_fail (priv->fd == -1);
+
+		finish_socket_setup (sock);
+	}
 
 	if (priv->fd != -1) {
 		guint type, len = sizeof (type);
@@ -180,8 +186,10 @@ disconnect_internal (SoupSocket *sock, gboolean close)
 	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
 
 	g_clear_object (&priv->gsock);
-	if (priv->conn && close)
+	if (priv->conn && close) {
 		g_io_stream_close (priv->conn, NULL, NULL);
+		g_clear_object (&priv->conn);
+	}
 
 	if (priv->read_src) {
 		g_source_destroy (priv->read_src);
@@ -203,7 +211,7 @@ soup_socket_finalize (GObject *object)
 			g_warning ("Disposing socket %p during connect", object);
 		g_object_unref (priv->connect_cancel);
 	}
-	if (priv->gsock && priv->close_on_dispose) {
+	if (priv->conn) {
 		if (priv->clean_dispose)
 			g_warning ("Disposing socket %p while still connected", object);
 		disconnect_internal (SOUP_SOCKET (object), TRUE);
@@ -239,20 +247,23 @@ finish_socket_setup (SoupSocket *sock)
 {
 	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
 
-	if (!priv->gsock)
-		return;
+	if (priv->gsock) {
+		if (!priv->conn)
+			priv->conn = (GIOStream *)g_socket_connection_factory_create_connection (priv->gsock);
+
+		g_socket_set_timeout (priv->gsock, priv->timeout);
+		g_socket_set_option (priv->gsock, IPPROTO_TCP, TCP_NODELAY, TRUE, NULL);
+	}
 
 	if (!priv->conn)
-		priv->conn = (GIOStream *)g_socket_connection_factory_create_connection (priv->gsock);
+		return;
+
 	if (!priv->iostream)
 		priv->iostream = soup_io_stream_new (priv->conn, FALSE);
 	if (!priv->istream)
 		priv->istream = g_object_ref (g_io_stream_get_input_stream (priv->iostream));
 	if (!priv->ostream)
 		priv->ostream = g_object_ref (g_io_stream_get_output_stream (priv->iostream));
-
-	g_socket_set_timeout (priv->gsock, priv->timeout);
-	g_socket_set_option (priv->gsock, IPPROTO_TCP, TCP_NODELAY, TRUE, NULL);
 }
 
 static void
@@ -268,6 +279,9 @@ soup_socket_set_property (GObject *object, guint prop_id,
 		break;
 	case PROP_GSOCKET:
 		priv->gsock = g_value_dup_object (value);
+		break;
+	case PROP_IOSTREAM:
+		priv->conn = g_value_dup_object (value);
 		break;
 	case PROP_LOCAL_ADDRESS:
 		priv->local_addr = g_value_dup_object (value);
@@ -293,12 +307,18 @@ soup_socket_set_property (GObject *object, guint prop_id,
 		priv->ssl_fallback = g_value_get_boolean (value);
 		break;
 	case PROP_ASYNC_CONTEXT:
-		priv->async_context = g_value_get_pointer (value);
-		if (priv->async_context)
-			g_main_context_ref (priv->async_context);
+		if (!priv->use_thread_context) {
+			priv->async_context = g_value_get_pointer (value);
+			if (priv->async_context)
+				g_main_context_ref (priv->async_context);
+		}
 		break;
 	case PROP_USE_THREAD_CONTEXT:
 		priv->use_thread_context = g_value_get_boolean (value);
+		if (priv->use_thread_context) {
+			g_clear_pointer (&priv->async_context, g_main_context_unref);
+			priv->async_context = g_main_context_ref_thread_default ();
+		}
 		break;
 	case PROP_TIMEOUT:
 		priv->timeout = g_value_get_uint (value);
@@ -309,9 +329,14 @@ soup_socket_set_property (GObject *object, guint prop_id,
 		props = g_value_get_boxed (value);
 		if (props) {
 			g_clear_pointer (&priv->async_context, g_main_context_unref);
-			if (props->async_context)
-				priv->async_context = g_main_context_ref (props->async_context);
-			priv->use_thread_context = props->use_thread_context;
+			if (props->use_thread_context) {
+				priv->use_thread_context = TRUE;
+				priv->async_context = g_main_context_ref_thread_default ();
+			} else {
+				priv->use_thread_context = FALSE;
+				if (props->async_context)
+					priv->async_context = g_main_context_ref (props->async_context);
+			}
 
 			g_clear_object (&priv->proxy_resolver);
 			if (props->proxy_resolver)
@@ -335,9 +360,6 @@ soup_socket_set_property (GObject *object, guint prop_id,
 
 			priv->clean_dispose = TRUE;
 		}
-		break;
-	case PROP_CLOSE_ON_DISPOSE:
-		priv->close_on_dispose = g_value_get_boolean (value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -399,10 +421,6 @@ soup_socket_get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_TLS_ERRORS:
 		g_value_set_flags (value, priv->tls_errors);
-		break;
-		break;
-	case PROP_CLOSE_ON_DISPOSE:
-		g_value_set_boolean (value, priv->close_on_dispose);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -530,6 +548,13 @@ soup_socket_class_init (SoupSocketClass *socket_class)
 				      "GSocket",
 				      "The socket's underlying GSocket",
 				      G_TYPE_SOCKET,
+				      G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
+	g_object_class_install_property (
+		 object_class, PROP_IOSTREAM,
+		 g_param_spec_object (SOUP_SOCKET_IOSTREAM,
+				      "GIOStream",
+				      "The socket's underlying GIOStream",
+				      G_TYPE_IO_STREAM,
 				      G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 
 	/**
@@ -770,14 +795,6 @@ soup_socket_class_init (SoupSocketClass *socket_class)
 				     "Socket properties",
 				     SOUP_TYPE_SOCKET_PROPERTIES,
 				     G_PARAM_WRITABLE));
-
-	g_object_class_install_property (
-		object_class, PROP_CLOSE_ON_DISPOSE,
-		g_param_spec_boolean (SOUP_SOCKET_CLOSE_ON_DISPOSE,
-				      "Close socket on disposal",
-				      "Whether the socket is closed on disposal",
-				      TRUE,
-				      G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
 }
 
 static void
@@ -1105,6 +1122,34 @@ soup_socket_get_gsocket (SoupSocket *sock)
 	return SOUP_SOCKET_GET_PRIVATE (sock)->gsock;
 }
 
+GSocket *
+soup_socket_steal_gsocket (SoupSocket *sock)
+{
+	SoupSocketPrivate *priv;
+	GSocket *gsock;
+
+	g_return_val_if_fail (SOUP_IS_SOCKET (sock), NULL);
+	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+
+	gsock = priv->gsock;
+	priv->gsock = NULL;
+	g_clear_object (&priv->conn);
+	g_clear_object (&priv->iostream);
+
+	return gsock;
+}
+
+gboolean
+soup_socket_is_readable (SoupSocket *sock)
+{
+	SoupSocketPrivate *priv;
+
+	g_return_val_if_fail (SOUP_IS_SOCKET (sock), FALSE);
+	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+
+	return g_pollable_input_stream_is_readable (G_POLLABLE_INPUT_STREAM (priv->istream));
+}
+
 GIOStream *
 soup_socket_get_connection (SoupSocket *sock)
 {
@@ -1127,7 +1172,6 @@ soup_socket_create_watch (SoupSocketPrivate *priv, GIOCondition cond,
 			  GCancellable *cancellable)
 {
 	GSource *watch;
-	GMainContext *async_context;
 
 	if (cond == G_IO_IN)
 		watch = g_pollable_input_stream_create_source (G_POLLABLE_INPUT_STREAM (priv->istream), cancellable);
@@ -1135,12 +1179,7 @@ soup_socket_create_watch (SoupSocketPrivate *priv, GIOCondition cond,
 		watch = g_pollable_output_stream_create_source (G_POLLABLE_OUTPUT_STREAM (priv->ostream), cancellable);
 	g_source_set_callback (watch, (GSourceFunc)callback, user_data, NULL);
 
-	if (priv->use_thread_context)
-		async_context = g_main_context_get_thread_default ();
-	else
-		async_context = priv->async_context;
-
-	g_source_attach (watch, async_context);
+	g_source_attach (watch, priv->async_context);
 	g_source_unref (watch);
 
 	return watch;
@@ -1207,6 +1246,23 @@ finish_listener_setup (SoupSocket *sock)
  **/
 gboolean
 soup_socket_listen (SoupSocket *sock)
+{
+	return soup_socket_listen_full (sock, NULL);
+}
+
+/**
+ * soup_socket_listen_full:
+ * @sock: a server #SoupSocket (which must not already be connected or listening)
+ * @error: error pointer
+ *
+ * Makes @sock start listening on its local address. When connections
+ * come in, @sock will emit #SoupSocket::new_connection.
+ *
+ * Return value: whether or not @sock is now listening.
+ **/
+gboolean
+soup_socket_listen_full (SoupSocket *sock,
+                         GError **error)
 
 {
 	SoupSocketPrivate *priv;
@@ -1229,7 +1285,7 @@ soup_socket_listen (SoupSocket *sock)
 	priv->gsock = g_socket_new (g_socket_address_get_family (addr),
 				    G_SOCKET_TYPE_STREAM,
 				    G_SOCKET_PROTOCOL_DEFAULT,
-				    NULL);
+				    error);
 	if (!priv->gsock)
 		goto cant_listen;
 	finish_socket_setup (sock);
@@ -1246,14 +1302,14 @@ soup_socket_listen (SoupSocket *sock)
 #endif
 
 	/* Bind */
-	if (!g_socket_bind (priv->gsock, addr, TRUE, NULL))
+	if (!g_socket_bind (priv->gsock, addr, TRUE, error))
 		goto cant_listen;
 	/* Force local_addr to be re-resolved now */
 	g_object_unref (priv->local_addr);
 	priv->local_addr = NULL;
 
 	/* Listen */
-	if (!g_socket_listen (priv->gsock, NULL))
+	if (!g_socket_listen (priv->gsock, error))
 		goto cant_listen;
 	finish_listener_setup (sock);
 
@@ -1385,7 +1441,7 @@ soup_socket_start_ssl (SoupSocket *sock, GCancellable *cancellable)
 	return soup_socket_setup_ssl (sock, soup_address_get_name (priv->remote_addr),
 				      cancellable, NULL);
 }
-	
+
 /**
  * soup_socket_start_proxy_ssl:
  * @sock: the socket
@@ -1515,7 +1571,7 @@ soup_socket_disconnect (SoupSocket *sock)
 		g_cancellable_cancel (priv->connect_cancel);
 		return;
 	} else if (g_mutex_trylock (&priv->iolock)) {
-		if (priv->gsock)
+		if (priv->conn)
 			disconnect_internal (sock, TRUE);
 		else
 			already_disconnected = TRUE;

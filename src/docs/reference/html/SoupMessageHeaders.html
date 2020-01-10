@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>libsoup Reference Manual: SoupMessageHeaders</title>
+<title>SoupMessageHeaders: libsoup Reference Manual</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch02.html" title="Core API">
 <link rel="prev" href="SoupMessage.html" title="SoupMessage">
 <link rel="next" href="SoupMessageBody.html" title="SoupMessageBody">
-<meta name="generator" content="GTK-Doc V1.21 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -111,10 +111,27 @@
 </td>
 </tr>
 <tr>
-<td class="function_type">const <span class="returnvalue">char</span> *
+<td class="function_type">
+<a class="link" href="SoupMessageHeaders.html#SoupMessageHeadersType" title="enum SoupMessageHeadersType"><span class="returnvalue">SoupMessageHeadersType</span></a>
 </td>
 <td class="function_name">
-<a class="link" href="SoupMessageHeaders.html#soup-message-headers-get" title="soup_message_headers_get ()">soup_message_headers_get</a> <span class="c_punctuation">()</span>
+<a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-headers-type" title="soup_message_headers_get_headers_type ()">soup_message_headers_get_headers_type</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="SoupMessageHeaders.html#soup-message-headers-header-contains" title="soup_message_headers_header_contains ()">soup_message_headers_header_contains</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="SoupMessageHeaders.html#soup-message-headers-header-equals" title="soup_message_headers_header_equals ()">soup_message_headers_header_equals</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -143,7 +160,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">gboolean</span>
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-iter-next" title="soup_message_headers_iter_next ()">soup_message_headers_iter_next</a> <span class="c_punctuation">()</span>
@@ -167,7 +184,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">goffset</span>
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="returnvalue">goffset</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-content-length" title="soup_message_headers_get_content_length ()">soup_message_headers_get_content_length</a> <span class="c_punctuation">()</span>
@@ -214,7 +231,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">gboolean</span>
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-content-disposition" title="soup_message_headers_get_content_disposition ()">soup_message_headers_get_content_disposition</a> <span class="c_punctuation">()</span>
@@ -230,7 +247,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">gboolean</span>
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-ranges" title="soup_message_headers_get_ranges ()">soup_message_headers_get_ranges</a> <span class="c_punctuation">()</span>
@@ -262,7 +279,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<span class="returnvalue">gboolean</span>
+<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-content-range" title="soup_message_headers_get_content_range ()">soup_message_headers_get_content_range</a> <span class="c_punctuation">()</span>
@@ -357,7 +374,6 @@ method if you are manually parsing or generating message headers.)</p>
 <div class="refsect3">
 <a name="id-1.3.9.8.2.6"></a><h4>Returns</h4>
 <p> a new <a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -555,7 +571,7 @@ soup_message_headers_clean_connection_headers
 </tr></tbody>
 </table></div>
 </div>
-<p class="since">Since 2.36</p>
+<p class="since">Since: 2.36</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -598,10 +614,10 @@ implementations.)</p>
 </div>
 <div class="refsect3">
 <a name="id-1.3.9.8.9.7"></a><h4>Returns</h4>
-<p> the header's value or <code class="literal">NULL</code> if not found. </p>
+<p> the header's value or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if not found. </p>
 <p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
-<p class="since">Since 2.28</p>
+<p class="since">Since: 2.28</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -648,34 +664,56 @@ same thing.</p>
 </div>
 <div class="refsect3">
 <a name="id-1.3.9.8.10.7"></a><h4>Returns</h4>
-<p> the header's value or <code class="literal">NULL</code> if not found. </p>
+<p> the header's value or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if not found. </p>
 <p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
-<p class="since">Since 2.28</p>
+<p class="since">Since: 2.28</p>
 </div>
 <hr>
 <div class="refsect2">
-<a name="soup-message-headers-get"></a><h3>soup_message_headers_get ()</h3>
-<pre class="programlisting">const <span class="returnvalue">char</span> *
-soup_message_headers_get (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
-                          <em class="parameter"><code>const <span class="type">char</span> *name</code></em>);</pre>
-<div class="warning">
-<p><code class="literal">soup_message_headers_get</code> is deprecated and should not be used in newly-written code.</p>
-<p>Use <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-one" title="soup_message_headers_get_one ()"><code class="function">soup_message_headers_get_one()</code></a> or
-<a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-list" title="soup_message_headers_get_list ()"><code class="function">soup_message_headers_get_list()</code></a> instead.</p>
-</div>
-<p>Gets the value of header <em class="parameter"><code>name</code></em>
- in <em class="parameter"><code>hdrs</code></em>
-.</p>
-<p>This method was supposed to work correctly for both single-valued
-and list-valued headers, but because some HTTP clients/servers
-mistakenly send multiple copies of headers that are supposed to be
-single-valued, it sometimes returns incorrect results. To fix this,
-the methods <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-one" title="soup_message_headers_get_one ()"><code class="function">soup_message_headers_get_one()</code></a> and
-<a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-list" title="soup_message_headers_get_list ()"><code class="function">soup_message_headers_get_list()</code></a> were introduced, so callers can
-explicitly state which behavior they are expecting.</p>
+<a name="soup-message-headers-get-headers-type"></a><h3>soup_message_headers_get_headers_type ()</h3>
+<pre class="programlisting"><a class="link" href="SoupMessageHeaders.html#SoupMessageHeadersType" title="enum SoupMessageHeadersType"><span class="returnvalue">SoupMessageHeadersType</span></a>
+soup_message_headers_get_headers_type (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>);</pre>
+<p>Gets the type of headers.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.11.7"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.11.5"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>hdrs</p></td>
+<td class="parameter_description"><p>a <a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.3.9.8.11.6"></a><h4>Returns</h4>
+<p> the header's type.</p>
+</div>
+<p class="since">Since: 2.50</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="soup-message-headers-header-contains"></a><h3>soup_message_headers_header_contains ()</h3>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+soup_message_headers_header_contains (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
+                                      <em class="parameter"><code>const <span class="type">char</span> *name</code></em>,
+                                      <em class="parameter"><code>const <span class="type">char</span> *token</code></em>);</pre>
+<p>Checks whether the list-valued header <em class="parameter"><code>name</code></em>
+ is present in <em class="parameter"><code>hdrs</code></em>
+,
+and contains a case-insensitive match for <em class="parameter"><code>token</code></em>
+.</p>
+<p>(If <em class="parameter"><code>name</code></em>
+ is present in <em class="parameter"><code>hdrs</code></em>
+, then this is equivalent to calling
+<a class="link" href="libsoup-2.4-Soup-Miscellaneous-Utilities.html#soup-header-contains" title="soup_header_contains ()"><code class="function">soup_header_contains()</code></a> on its value.)</p>
+<div class="refsect3">
+<a name="id-1.3.9.8.12.6"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -693,14 +731,68 @@ explicitly state which behavior they are expecting.</p>
 <td class="parameter_description"><p>header name</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
+<tr>
+<td class="parameter_name"><p>token</p></td>
+<td class="parameter_description"><p>token to look for</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.11.8"></a><h4>Returns</h4>
-<p> as with <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-list" title="soup_message_headers_get_list ()"><code class="function">soup_message_headers_get_list()</code></a>. </p>
-<p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
+<a name="id-1.3.9.8.12.7"></a><h4>Returns</h4>
+<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the header is present and contains <em class="parameter"><code>token</code></em>
+,
+<a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
+<p class="since">Since: 2.50</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="soup-message-headers-header-equals"></a><h3>soup_message_headers_header_equals ()</h3>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+soup_message_headers_header_equals (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
+                                    <em class="parameter"><code>const <span class="type">char</span> *name</code></em>,
+                                    <em class="parameter"><code>const <span class="type">char</span> *value</code></em>);</pre>
+<p>Checks whether the header <em class="parameter"><code>name</code></em>
+ is present in <em class="parameter"><code>hdrs</code></em>
+ and is
+(case-insensitively) equal to <em class="parameter"><code>value</code></em>
+.</p>
+<div class="refsect3">
+<a name="id-1.3.9.8.13.5"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>hdrs</p></td>
+<td class="parameter_description"><p>a <a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>name</p></td>
+<td class="parameter_description"><p>header name</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>value</p></td>
+<td class="parameter_description"><p>expected value</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.3.9.8.13.6"></a><h4>Returns</h4>
+<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the header is present and its value is
+<em class="parameter"><code>value</code></em>
+, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+</div>
+<p class="since">Since: 2.50</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -708,10 +800,10 @@ explicitly state which behavior they are expecting.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 <span class="c_punctuation">(</span>*SoupMessageHeadersForeachFunc<span class="c_punctuation">)</span> (<em class="parameter"><code>const <span class="type">char</span> *name</code></em>,
                                   <em class="parameter"><code>const <span class="type">char</span> *value</code></em>,
-                                  <em class="parameter"><code><span class="type">gpointer</span> user_data</code></em>);</pre>
+                                  <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
 <p>The callback passed to <a class="link" href="SoupMessageHeaders.html#soup-message-headers-foreach" title="soup_message_headers_foreach ()"><code class="function">soup_message_headers_foreach()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.12.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.14.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -744,11 +836,11 @@ explicitly state which behavior they are expecting.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_message_headers_foreach (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
                               <em class="parameter"><code><a class="link" href="SoupMessageHeaders.html#SoupMessageHeadersForeachFunc" title="SoupMessageHeadersForeachFunc ()"><span class="type">SoupMessageHeadersForeachFunc</span></a> func</code></em>,
-                              <em class="parameter"><code><span class="type">gpointer</span> user_data</code></em>);</pre>
+                              <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
 <p>Calls <em class="parameter"><code>func</code></em>
  once for each header value in <em class="parameter"><code>hdrs</code></em>
 .</p>
-<p>Beware that unlike <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get" title="soup_message_headers_get ()"><code class="function">soup_message_headers_get()</code></a>, this processes the
+<p>Beware that unlike <code class="function">soup_message_headers_get()</code>, this processes the
 headers in exactly the way they were added, rather than
 concatenating multiple same-named headers into a single value.
 (This is intentional; it ensures that if you call
@@ -759,7 +851,7 @@ required for interoperability in some cases.)</p>
 <p>You may not modify the headers from <em class="parameter"><code>func</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.13.7"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.15.7"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -797,7 +889,7 @@ soup_message_headers_iter_init (<em class="parameter"><code><a class="link" href
  for iterating <em class="parameter"><code>hdrs</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.14.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.16.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -823,7 +915,7 @@ structure. </p></td>
 <hr>
 <div class="refsect2">
 <a name="soup-message-headers-iter-next"></a><h3>soup_message_headers_iter_next ()</h3>
-<pre class="programlisting"><span class="returnvalue">gboolean</span>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 soup_message_headers_iter_next (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html#SoupMessageHeadersIter" title="SoupMessageHeadersIter"><span class="type">SoupMessageHeadersIter</span></a> *iter</code></em>,
                                 <em class="parameter"><code>const <span class="type">char</span> **name</code></em>,
                                 <em class="parameter"><code>const <span class="type">char</span> **value</code></em>);</pre>
@@ -831,12 +923,12 @@ soup_message_headers_iter_next (<em class="parameter"><code><a class="link" href
 iterated by <em class="parameter"><code>iter</code></em>
 . If <em class="parameter"><code>iter</code></em>
  has already yielded the last header,
-then <a class="link" href="SoupMessageHeaders.html#soup-message-headers-iter-next" title="soup_message_headers_iter_next ()"><code class="function">soup_message_headers_iter_next()</code></a> will return <code class="literal">FALSE</code> and <em class="parameter"><code>name</code></em>
+then <a class="link" href="SoupMessageHeaders.html#soup-message-headers-iter-next" title="soup_message_headers_iter_next ()"><code class="function">soup_message_headers_iter_next()</code></a> will return <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> and <em class="parameter"><code>name</code></em>
 
 and <em class="parameter"><code>value</code></em>
  will be unchanged.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.15.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.17.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -865,10 +957,9 @@ the header value in. </p></td>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.15.6"></a><h4>Returns</h4>
-<p> <code class="literal">TRUE</code> if another name and value were returned, <code class="literal">FALSE</code>
+<a name="id-1.3.9.8.17.6"></a><h4>Returns</h4>
+<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if another name and value were returned, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>
 if the end of the headers has been reached.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -882,7 +973,7 @@ always correspond to the encoding used on the wire; eg, a HEAD
 response may declare a Content-Length or Transfer-Encoding, but
 it will never actually include a body.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.16.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.18.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -897,10 +988,9 @@ it will never actually include a body.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.16.6"></a><h4>Returns</h4>
+<a name="id-1.3.9.8.18.6"></a><h4>Returns</h4>
 <p> the encoding declared by <em class="parameter"><code>hdrs</code></em>
 .</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -914,7 +1004,7 @@ soup_message_headers_set_encoding (<em class="parameter"><code><a class="link" h
 you should use this if you are going to send a request or response in
 chunked encoding.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.17.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.19.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -939,7 +1029,7 @@ chunked encoding.</p>
 <hr>
 <div class="refsect2">
 <a name="soup-message-headers-get-content-length"></a><h3>soup_message_headers_get_content_length ()</h3>
-<pre class="programlisting"><span class="returnvalue">goffset</span>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="returnvalue">goffset</span></a>
 soup_message_headers_get_content_length
                                (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>);</pre>
 <p>Gets the message body length that <em class="parameter"><code>hdrs</code></em>
@@ -947,7 +1037,7 @@ soup_message_headers_get_content_length
 be non-0 if <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-encoding" title="soup_message_headers_get_encoding ()"><code class="function">soup_message_headers_get_encoding()</code></a> returns
 <a class="link" href="SoupMessageHeaders.html#SOUP-ENCODING-CONTENT-LENGTH:CAPS"><code class="literal">SOUP_ENCODING_CONTENT_LENGTH</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.18.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.20.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -962,10 +1052,9 @@ be non-0 if <a class="link" href="SoupMessageHeaders.html#soup-message-headers-g
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.18.6"></a><h4>Returns</h4>
+<a name="id-1.3.9.8.20.6"></a><h4>Returns</h4>
 <p> the message body length declared by <em class="parameter"><code>hdrs</code></em>
 .</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -974,7 +1063,7 @@ be non-0 if <a class="link" href="SoupMessageHeaders.html#soup-message-headers-g
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_message_headers_set_content_length
                                (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> content_length</code></em>);</pre>
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> content_length</code></em>);</pre>
 <p>Sets the message body length that <em class="parameter"><code>hdrs</code></em>
  will declare, and sets
 <em class="parameter"><code>hdrs</code></em>
@@ -989,7 +1078,7 @@ generating the response to a HEAD request; Calling
 correct content length into the response without needing to waste
 memory by filling in a response body which won't actually be sent.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.19.6"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.21.6"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1021,7 +1110,7 @@ soup_message_headers_get_expectations (<em class="parameter"><code><a class="lin
 Currently this will either be <a class="link" href="SoupMessageHeaders.html#SOUP-EXPECTATION-CONTINUE:CAPS"><code class="literal">SOUP_EXPECTATION_CONTINUE</code></a> or
 <a class="link" href="SoupMessageHeaders.html#SOUP-EXPECTATION-UNRECOGNIZED:CAPS"><code class="literal">SOUP_EXPECTATION_UNRECOGNIZED</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.20.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.22.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1036,10 +1125,9 @@ Currently this will either be <a class="link" href="SoupMessageHeaders.html#SOUP
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.20.6"></a><h4>Returns</h4>
+<a name="id-1.3.9.8.22.6"></a><h4>Returns</h4>
 <p> the contents of <em class="parameter"><code>hdrs</code></em>
 's "Expect" header</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -1060,7 +1148,7 @@ post, or because you're POSTing to a URL that doesn't exist). This
 saves you from having to transmit the large request body when the
 server is just going to ignore it anyway.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.21.6"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.23.6"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1087,16 +1175,16 @@ server is just going to ignore it anyway.</p>
 <a name="soup-message-headers-get-content-type"></a><h3>soup_message_headers_get_content_type ()</h3>
 <pre class="programlisting">const <span class="returnvalue">char</span> *
 soup_message_headers_get_content_type (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
-                                       <em class="parameter"><code><span class="type">GHashTable</span> **params</code></em>);</pre>
+                                       <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Hash-Tables.html#GHashTable"><span class="type">GHashTable</span></a> **params</code></em>);</pre>
 <p>Looks up the "Content-Type" header in <em class="parameter"><code>hdrs</code></em>
 , parses it, and returns
 its value in *<em class="parameter"><code>content_type</code></em>
  and *<em class="parameter"><code>params</code></em>
 . <em class="parameter"><code>params</code></em>
- can be <code class="literal">NULL</code> if you
+ can be <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if you
 are only interested in the content type itself.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.22.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.24.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1112,23 +1200,23 @@ are only interested in the content type itself.</p>
 <tr>
 <td class="parameter_name"><p>params</p></td>
 <td class="parameter_description"><p>  return location for the Content-Type parameters (eg, "charset"), or
-<code class="literal">NULL</code>. </p></td>
+<a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8 utf8][<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>][<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></td>
 </tr>
 </tbody>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.22.6"></a><h4>Returns</h4>
+<a name="id-1.3.9.8.24.6"></a><h4>Returns</h4>
 <p> a string with the value of the
-"Content-Type" header or <code class="literal">NULL</code> if <em class="parameter"><code>hdrs</code></em>
+"Content-Type" header or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if <em class="parameter"><code>hdrs</code></em>
 does not contain that
 header or it cannot be parsed (in which case *<em class="parameter"><code>params</code></em>
 will be
 unchanged). </p>
 <p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1136,14 +1224,14 @@ unchanged). </p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_message_headers_set_content_type (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
                                        <em class="parameter"><code>const <span class="type">char</span> *content_type</code></em>,
-                                       <em class="parameter"><code><span class="type">GHashTable</span> *params</code></em>);</pre>
+                                       <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Hash-Tables.html#GHashTable"><span class="type">GHashTable</span></a> *params</code></em>);</pre>
 <p>Sets the "Content-Type" header in <em class="parameter"><code>hdrs</code></em>
  to <em class="parameter"><code>content_type</code></em>
 ,
 optionally with additional parameters specified in <em class="parameter"><code>params</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.23.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.25.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1164,29 +1252,29 @@ optionally with additional parameters specified in <em class="parameter"><code>p
 <tr>
 <td class="parameter_name"><p>params</p></td>
 <td class="parameter_description"><p> additional
-parameters, or <code class="literal">NULL</code>. </p></td>
+parameters, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8 utf8]</span></td>
 </tr>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="soup-message-headers-get-content-disposition"></a><h3>soup_message_headers_get_content_disposition ()</h3>
-<pre class="programlisting"><span class="returnvalue">gboolean</span>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 soup_message_headers_get_content_disposition
                                (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
                                 <em class="parameter"><code><span class="type">char</span> **disposition</code></em>,
-                                <em class="parameter"><code><span class="type">GHashTable</span> **params</code></em>);</pre>
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Hash-Tables.html#GHashTable"><span class="type">GHashTable</span></a> **params</code></em>);</pre>
 <p>Looks up the "Content-Disposition" header in <em class="parameter"><code>hdrs</code></em>
 , parses it, and
 returns its value in *<em class="parameter"><code>disposition</code></em>
  and *<em class="parameter"><code>params</code></em>
 . <em class="parameter"><code>params</code></em>
  can be
-<code class="literal">NULL</code> if you are only interested in the disposition-type.</p>
+<a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if you are only interested in the disposition-type.</p>
 <p>In HTTP, the most common use of this header is to set a
 disposition-type of "attachment", to suggest to the browser that a
 response should be saved to disk rather than displayed in the
@@ -1200,7 +1288,7 @@ test this yourself.)</p>
 this is handled automatically by <a class="link" href="SoupMultipart.html" title="SoupMultipart"><span class="type">SoupMultipart</span></a> and the associated
 form methods.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.24.7"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.26.7"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1216,28 +1304,27 @@ form methods.</p>
 <tr>
 <td class="parameter_name"><p>disposition</p></td>
 <td class="parameter_description"><p> return location for the
-disposition-type, or <code class="literal">NULL</code>. </p></td>
+disposition-type, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>params</p></td>
 <td class="parameter_description"><p> return
-location for the Content-Disposition parameters, or <code class="literal">NULL</code>. </p></td>
+location for the Content-Disposition parameters, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8 utf8]</span></td>
 </tr>
 </tbody>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.24.8"></a><h4>Returns</h4>
-<p> <code class="literal">TRUE</code> if <em class="parameter"><code>hdrs</code></em>
+<a name="id-1.3.9.8.26.8"></a><h4>Returns</h4>
+<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>hdrs</code></em>
 contains a "Content-Disposition"
-header, <code class="literal">FALSE</code> if not (in which case *<em class="parameter"><code>disposition</code></em>
+header, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if not (in which case *<em class="parameter"><code>disposition</code></em>
 and *<em class="parameter"><code>params</code></em>
 will be unchanged).</p>
-<p></p>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1246,7 +1333,7 @@ will be unchanged).</p>
 soup_message_headers_set_content_disposition
                                (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
                                 <em class="parameter"><code>const <span class="type">char</span> *disposition</code></em>,
-                                <em class="parameter"><code><span class="type">GHashTable</span> *params</code></em>);</pre>
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Hash-Tables.html#GHashTable"><span class="type">GHashTable</span></a> *params</code></em>);</pre>
 <p>Sets the "Content-Disposition" header in <em class="parameter"><code>hdrs</code></em>
  to <em class="parameter"><code>disposition</code></em>
 ,
@@ -1255,7 +1342,7 @@ optionally with additional parameters specified in <em class="parameter"><code>p
 <p>See <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-content-disposition" title="soup_message_headers_get_content_disposition ()"><code class="function">soup_message_headers_get_content_disposition()</code></a> for a discussion
 of how Content-Disposition is used in HTTP.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.25.6"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.27.6"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1276,20 +1363,20 @@ of how Content-Disposition is used in HTTP.</p>
 <tr>
 <td class="parameter_name"><p>params</p></td>
 <td class="parameter_description"><p> additional
-parameters, or <code class="literal">NULL</code>. </p></td>
+parameters, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8 utf8]</span></td>
 </tr>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="soup-message-headers-get-ranges"></a><h3>soup_message_headers_get_ranges ()</h3>
-<pre class="programlisting"><span class="returnvalue">gboolean</span>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 soup_message_headers_get_ranges (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
-                                 <em class="parameter"><code><span class="type">goffset</span> total_length</code></em>,
+                                 <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> total_length</code></em>,
                                  <em class="parameter"><code><a class="link" href="SoupMessageHeaders.html#SoupRange" title="SoupRange"><span class="type">SoupRange</span></a> **ranges</code></em>,
                                  <em class="parameter"><code><span class="type">int</span> *length</code></em>);</pre>
 <p>Parses <em class="parameter"><code>hdrs</code></em>
@@ -1323,7 +1410,7 @@ body available, and only want to generate the parts that were
 actually requested by the client.
 </p></div>
 <div class="refsect3">
-<a name="id-1.3.9.8.26.8"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.28.8"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1356,15 +1443,14 @@ of <a class="link" href="SoupMessageHeaders.html#SoupRange" title="SoupRange"><s
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.26.9"></a><h4>Returns</h4>
-<p> <code class="literal">TRUE</code> if <em class="parameter"><code>hdrs</code></em>
+<a name="id-1.3.9.8.28.9"></a><h4>Returns</h4>
+<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>hdrs</code></em>
 contained a syntactically-valid
-"Range" header, <code class="literal">FALSE</code> otherwise (in which case <em class="parameter"><code>range</code></em>
+"Range" header, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise (in which case <em class="parameter"><code>range</code></em>
 and <em class="parameter"><code>length</code></em>
 will not be set).</p>
-<p></p>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1378,7 +1464,7 @@ soup_message_headers_set_ranges (<em class="parameter"><code><a class="link" hre
 only want to request a single range, you can use
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-set-range" title="soup_message_headers_set_range ()"><code class="function">soup_message_headers_set_range()</code></a>.)</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.27.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.29.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1405,15 +1491,15 @@ only want to request a single range, you can use
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="soup-message-headers-set-range"></a><h3>soup_message_headers_set_range ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_message_headers_set_range (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> start</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> end</code></em>);</pre>
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> start</code></em>,
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> end</code></em>);</pre>
 <p>Sets <em class="parameter"><code>hdrs</code></em>
 's Range header to request the indicated range.
 <em class="parameter"><code>start</code></em>
@@ -1422,7 +1508,7 @@ soup_message_headers_set_range (<em class="parameter"><code><a class="link" href
 <p>If you need to request multiple ranges, use
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-set-ranges" title="soup_message_headers_set_ranges ()"><code class="function">soup_message_headers_set_ranges()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.28.6"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.30.6"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1448,7 +1534,7 @@ soup_message_headers_set_range (<em class="parameter"><code><a class="link" href
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1458,7 +1544,7 @@ soup_message_headers_free_ranges (<em class="parameter"><code><a class="link" hr
                                   <em class="parameter"><code><a class="link" href="SoupMessageHeaders.html#SoupRange" title="SoupRange"><span class="type">SoupRange</span></a> *ranges</code></em>);</pre>
 <p>Frees the array of ranges returned from <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-ranges" title="soup_message_headers_get_ranges ()"><code class="function">soup_message_headers_get_ranges()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.29.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.31.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1479,17 +1565,17 @@ soup_message_headers_free_ranges (<em class="parameter"><code><a class="link" hr
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="soup-message-headers-get-content-range"></a><h3>soup_message_headers_get_content_range ()</h3>
-<pre class="programlisting"><span class="returnvalue">gboolean</span>
+<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 soup_message_headers_get_content_range
                                (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> *start</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> *end</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> *total_length</code></em>);</pre>
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> *start</code></em>,
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> *end</code></em>,
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> *total_length</code></em>);</pre>
 <p>Parses <em class="parameter"><code>hdrs</code></em>
 's Content-Range header and returns it in <em class="parameter"><code>start</code></em>
 ,
@@ -1499,7 +1585,7 @@ soup_message_headers_get_content_range
 was specified as "*", then <em class="parameter"><code>total_length</code></em>
  will be set to -1.</p>
 <div class="refsect3">
-<a name="id-1.3.9.8.30.5"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.32.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1525,20 +1611,19 @@ was specified as "*", then <em class="parameter"><code>total_length</code></em>
 <tr>
 <td class="parameter_name"><p>total_length</p></td>
 <td class="parameter_description"><p>return value for the total length of the resource,
-or <code class="literal">NULL</code> if you don't care.</p></td>
+or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if you don't care.</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.9.8.30.6"></a><h4>Returns</h4>
-<p> <code class="literal">TRUE</code> if <em class="parameter"><code>hdrs</code></em>
+<a name="id-1.3.9.8.32.6"></a><h4>Returns</h4>
+<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>hdrs</code></em>
 contained a "Content-Range" header
-containing a byte range which could be parsed, <code class="literal">FALSE</code> otherwise.</p>
-<p></p>
+containing a byte range which could be parsed, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1546,9 +1631,9 @@ containing a byte range which could be parsed, <code class="literal">FALSE</code
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_message_headers_set_content_range
                                (<em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> *hdrs</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> start</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> end</code></em>,
-                                <em class="parameter"><code><span class="type">goffset</span> total_length</code></em>);</pre>
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> start</code></em>,
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> end</code></em>,
+                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> total_length</code></em>);</pre>
 <p>Sets <em class="parameter"><code>hdrs</code></em>
 's Content-Range header according to the given values.
 (Note that <em class="parameter"><code>total_length</code></em>
@@ -1562,7 +1647,7 @@ not normally need to call this function youself. See
 <a class="link" href="SoupMessageHeaders.html#soup-message-headers-get-ranges" title="soup_message_headers_get_ranges ()"><code class="function">soup_message_headers_get_ranges()</code></a> for more details.
 </p></div>
 <div class="refsect3">
-<a name="id-1.3.9.8.31.6"></a><h4>Parameters</h4>
+<a name="id-1.3.9.8.33.6"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1593,7 +1678,7 @@ not normally need to call this function youself. See
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 </div>
 <div class="refsect1">
@@ -1793,19 +1878,19 @@ range", referring to the last -<em class="parameter"><code>start</code></em>
 </colgroup>
 <tbody>
 <tr>
-<td class="struct_member_name"><p><span class="type">goffset</span> <em class="structfield"><code><a name="SoupRange.start"></a>start</code></em>;</p></td>
+<td class="struct_member_name"><p><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> <em class="structfield"><code><a name="SoupRange.start"></a>start</code></em>;</p></td>
 <td class="struct_member_description"><p>the start of the range</p></td>
 <td class="struct_member_annotations"> </td>
 </tr>
 <tr>
-<td class="struct_member_name"><p><span class="type">goffset</span> <em class="structfield"><code><a name="SoupRange.end"></a>end</code></em>;</p></td>
+<td class="struct_member_name"><p><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#goffset"><span class="type">goffset</span></a> <em class="structfield"><code><a name="SoupRange.end"></a>end</code></em>;</p></td>
 <td class="struct_member_description"><p>the end of the range</p></td>
 <td class="struct_member_annotations"> </td>
 </tr>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.26</p>
+<p class="since">Since: 2.26</p>
 </div>
 </div>
 <div class="refsect1">
@@ -1814,7 +1899,6 @@ range", referring to the last -<em class="parameter"><code>start</code></em>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21</div>
+<hr>Generated by GTK-Doc V1.24</div>
 </body>
 </html>

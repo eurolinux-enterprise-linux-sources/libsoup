@@ -19,6 +19,8 @@
 #include "soup-misc-private.h"
 #include "soup-path-map.h" 
 #include "soup-socket-private.h"
+#include "soup-websocket.h"
+#include "soup-websocket-connection.h"
 
 /**
  * SECTION:soup-server
@@ -34,28 +36,68 @@
  * details on the older #SoupServer API.)
  * 
  * To begin, create a server using soup_server_new(). Add at least one
- * handler by calling soup_server_add_handler(); the handler will be
- * called to process any requests underneath the path passed to
- * soup_server_add_handler(). (If you want all requests to go to the
- * same handler, just pass "/" (or %NULL) for the path.) Any request
- * that does not match any handler will automatically be returned to
- * the client with a 404 (Not Found) status.
+ * handler by calling soup_server_add_handler() or
+ * soup_server_add_early_handler(); the handler will be called to
+ * process any requests underneath the path you pass. (If you want all
+ * requests to go to the same handler, just pass "/" (or %NULL) for
+ * the path.)
+ *
+ * When a new connection is accepted (or a new request is started on
+ * an existing persistent connection), the #SoupServer will emit
+ * #SoupServer::request-started and then begin processing the request
+ * as described below, but note that once the message is assigned a
+ * #SoupMessage:status-code, then callbacks after that point will be
+ * skipped. Note also that it is not defined when the callbacks happen
+ * relative to various #SoupMessage signals.
+ *
+ * Once the headers have been read, #SoupServer will check if there is
+ * a #SoupAuthDomain (qv) covering the Request-URI; if so, and if the
+ * message does not contain suitable authorization, then the
+ * #SoupAuthDomain will set a status of %SOUP_STATUS_UNAUTHORIZED on
+ * the message.
+ *
+ * After checking for authorization, #SoupServer will look for "early"
+ * handlers (added with soup_server_add_early_handler()) matching the
+ * Request-URI. If one is found, it will be run; in particular, this
+ * can be used to connect to signals to do a streaming read of the
+ * request body.
+ *
+ * (At this point, if the request headers contain "<literal>Expect:
+ * 100-continue</literal>", and a status code has been set, then
+ * #SoupServer will skip the remaining steps and return the response.
+ * If the request headers contain "<literal>Expect:
+ * 100-continue</literal>" and no status code has been set,
+ * #SoupServer will return a %SOUP_STATUS_CONTINUE status before
+ * continuing.)
+ *
+ * The server will then read in the response body (if present). At
+ * this point, if there are no handlers at all defined for the
+ * Request-URI, then the server will return %SOUP_STATUS_NOT_FOUND to
+ * the client.
+ *
+ * Otherwise (assuming no previous step assigned a status to the
+ * message) any "normal" handlers (added with
+ * soup_server_add_handler()) for the message's Request-URI will be
+ * run.
+ *
+ * Then, if the path has a WebSocket handler registered (and has
+ * not yet been assigned a status), #SoupServer will attempt to
+ * validate the WebSocket handshake, filling in the response and
+ * setting a status of %SOUP_STATUS_SWITCHING_PROTOCOLS or
+ * %SOUP_STATUS_BAD_REQUEST accordingly.
+ *
+ * If the message still has no status code at this point (and has not
+ * been paused with soup_server_pause_message()), then it will be
+ * given a status of %SOUP_STATUS_INTERNAL_SERVER_ERROR (because at
+ * least one handler ran, but returned without assigning a status).
+ *
+ * Finally, the server will emit #SoupServer::request-finished (or
+ * #SoupServer::request-aborted if an I/O error occurred before
+ * handling was completed).
  *
  * If you want to handle the special "*" URI (eg, "OPTIONS *"), you
  * must explicitly register a handler for "*"; the default handler
  * will not be used for that case.
- * 
- * To add authentication to some or all paths, create an appropriate
- * #SoupAuthDomain (qv), and add it to the server via
- * soup_server_add_auth_domain(). (As with handlers, you must
- * explicitly add "*" to an auth domain if you want it to be covered.)
- * 
- * Additional processing options are available via #SoupServer's
- * signals; Connect to #SoupServer::request-started to be notified
- * every time a new request is being processed. (This gives you a
- * chance to connect to the #SoupMessage "<literal>got-</literal>"
- * signals in case you want to do processing before the body has been
- * fully read.)
  * 
  * If you want to process https connections in addition to (or instead
  * of) http connections, you can either set the
@@ -91,22 +133,34 @@ static guint signals[LAST_SIGNAL] = { 0 };
 struct SoupClientContext {
 	SoupServer     *server;
 	SoupSocket     *sock;
+	GSocket        *gsock;
 	SoupMessage    *msg;
 	SoupAuthDomain *auth_domain;
 	char           *auth_user;
 
 	GSocketAddress *remote_addr;
+	const char     *remote_ip;
 	GSocketAddress *local_addr;
 
 	int             ref_count;
 };
 
 typedef struct {
-	char                   *path;
+	char               *path;
 
-	SoupServerCallback      callback;
-	GDestroyNotify          destroy;
-	gpointer                user_data;
+	SoupServerCallback  early_callback;
+	GDestroyNotify      early_destroy;
+	gpointer            early_user_data;
+
+	SoupServerCallback  callback;
+	GDestroyNotify      destroy;
+	gpointer            user_data;
+
+	char                         *websocket_origin;
+	char                        **websocket_protocols;
+	SoupServerWebsocketCallback   websocket_callback;
+	GDestroyNotify                websocket_destroy;
+	gpointer                      websocket_user_data;
 } SoupServerHandler;
 
 typedef struct {
@@ -123,8 +177,7 @@ typedef struct {
 
 	gboolean           raw_paths;
 	SoupPathMap       *handlers;
-	SoupServerHandler *default_handler;
-	
+
 	GSList            *auth_domains;
 
 	char             **http_aliases, **https_aliases;
@@ -162,10 +215,18 @@ static SoupClientContext *soup_client_context_ref (SoupClientContext *client);
 static void soup_client_context_unref (SoupClientContext *client);
 
 static void
-free_handler (SoupServerHandler *hand)
+free_handler (SoupServerHandler *handler)
 {
-	g_free (hand->path);
-	g_slice_free (SoupServerHandler, hand);
+	g_free (handler->path);
+	g_free (handler->websocket_origin);
+	g_strfreev (handler->websocket_protocols);
+	if (handler->early_destroy)
+		handler->early_destroy (handler->early_user_data);
+	if (handler->destroy)
+		handler->destroy (handler->user_data);
+	if (handler->websocket_destroy)
+		handler->websocket_destroy (handler->websocket_user_data);
+	g_slice_free (SoupServerHandler, handler);
 }
 
 static void
@@ -191,7 +252,7 @@ soup_server_dispose (GObject *object)
 	priv->disposed = TRUE;
 	soup_server_disconnect (server);
 
-	G_OBJECT_CLASS (soup_server_parent_class)->finalize (object);
+	G_OBJECT_CLASS (soup_server_parent_class)->dispose (object);
 }
 
 static void
@@ -208,31 +269,6 @@ soup_server_finalize (GObject *object)
 
 	g_free (priv->server_header);
 
-	while (priv->clients) {
-		SoupClientContext *client = priv->clients->data;
-		SoupSocket *sock = g_object_ref (client->sock);
-
-		priv->clients = g_slist_remove (priv->clients, client);
-
-		/* keep a ref on the client context so it doesn't get destroyed
-		 * when we finish the message; the SoupSocket::disconnect
-		 * handler will refer to client->server later when the socket is
-		 * disconnected.
-		 */
-		soup_client_context_ref (client);
-
-		if (client->msg) {
-			soup_message_set_status (client->msg, SOUP_STATUS_IO_ERROR);
-			soup_message_io_finished (client->msg);
-		}
-
-		soup_socket_disconnect (sock);
-		g_object_unref (sock);
-
-		soup_client_context_unref (client);
-	}
-
-	g_clear_pointer (&priv->default_handler, free_handler);
 	soup_path_map_free (priv->handlers);
 
 	g_slist_free_full (priv->auth_domains, g_object_unref);
@@ -537,9 +573,9 @@ soup_server_class_init (SoupServerClass *server_class)
 	 * @message will have all of its request-side information
 	 * filled in, and if the message was authenticated, @client
 	 * will have information about that. This signal is emitted
-	 * before any handlers are called for the message, and if it
-	 * sets the message's #status_code, then normal handler
-	 * processing will be skipped.
+	 * before any (non-early) handlers are called for the message,
+	 * and if it sets the message's #status_code, then normal
+	 * handler processing will be skipped.
 	 **/
 	signals[REQUEST_READ] =
 		g_signal_new ("request-read",
@@ -854,7 +890,7 @@ soup_server_class_init (SoupServerClass *server_class)
 	 * Since: 2.44
 	 */
 	/**
-	 * SOUP_SERVERI_HTTP_ALIASES:
+	 * SOUP_SERVER_HTTP_ALIASES:
 	 *
 	 * Alias for the #SoupServer:http-aliases property, qv.
 	 *
@@ -979,6 +1015,13 @@ soup_server_set_ssl_cert_file  (SoupServer  *server,
 
 	if (priv->tls_cert)
 		g_object_unref (priv->tls_cert);
+
+	g_free (priv->ssl_cert_file);
+	priv->ssl_cert_file = g_strdup (ssl_cert_file);
+
+	g_free (priv->ssl_key_file);
+	priv->ssl_key_file = g_strdup (ssl_key_file);
+
 	priv->tls_cert = g_tls_certificate_new_from_files (priv->ssl_cert_file,
 							   priv->ssl_key_file,
 							   error);
@@ -1082,6 +1125,7 @@ soup_server_get_listeners (SoupServer *server)
 }
 
 static void start_request (SoupServer *, SoupClientContext *);
+static void socket_disconnected (SoupSocket *sock, SoupClientContext *client);
 
 static SoupClientContext *
 soup_client_context_new (SoupServer *server, SoupSocket *sock)
@@ -1089,7 +1133,12 @@ soup_client_context_new (SoupServer *server, SoupSocket *sock)
 	SoupClientContext *client = g_slice_new0 (SoupClientContext);
 
 	client->server = server;
-	client->sock = sock;
+	client->sock = g_object_ref (sock);
+	client->gsock = soup_socket_get_gsocket (sock);
+	if (client->gsock)
+		g_object_ref (client->gsock);
+	g_signal_connect (sock, "disconnected",
+			  G_CALLBACK (socket_disconnected), client);
 	client->ref_count = 1;
 
 	return client;
@@ -1116,56 +1165,106 @@ soup_client_context_ref (SoupClientContext *client)
 static void
 soup_client_context_unref (SoupClientContext *client)
 {
-	if (--client->ref_count == 0) {
-		soup_client_context_cleanup (client);
-		g_slice_free (SoupClientContext, client);
-	}
+	if (--client->ref_count != 0)
+		return;
+
+	soup_client_context_cleanup (client);
+
+	g_signal_handlers_disconnect_by_func (client->sock, socket_disconnected, client);
+	g_object_unref (client->sock);
+	g_clear_object (&client->gsock);
+	g_clear_pointer (&client->remote_ip, g_free);
+	g_slice_free (SoupClientContext, client);
 }
 
 static void
-request_finished (SoupMessage *msg, gboolean io_complete, gpointer user_data)
+request_finished (SoupMessage *msg, SoupMessageIOCompletion completion, gpointer user_data)
 {
 	SoupClientContext *client = user_data;
 	SoupServer *server = client->server;
+	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (server);
 	SoupSocket *sock = client->sock;
+	gboolean failed;
 
-	soup_message_finished (msg);
+	if (completion == SOUP_MESSAGE_IO_STOLEN) {
+		soup_client_context_unref (client);
+		g_object_unref (msg);
+		return;
+	}
 
-	g_signal_emit (server,
-		       (!io_complete || msg->status_code == SOUP_STATUS_IO_ERROR) ?
-		       signals[REQUEST_ABORTED] : signals[REQUEST_FINISHED],
-		       0, msg, client);
+	/* Complete the message, assuming it actually really started. */
+	if (msg->method) {
+		soup_message_finished (msg);
 
-	soup_client_context_cleanup (client);
-	if (io_complete && soup_socket_is_connected (sock) &&
-	    soup_message_is_keepalive (msg)) {
-		/* Start a new request */
+		failed = (completion == SOUP_MESSAGE_IO_INTERRUPTED ||
+			  msg->status_code == SOUP_STATUS_IO_ERROR);
+		g_signal_emit (server,
+			       failed ? signals[REQUEST_ABORTED] : signals[REQUEST_FINISHED],
+			       0, msg, client);
+	}
+
+	if (completion == SOUP_MESSAGE_IO_COMPLETE &&
+	    soup_socket_is_connected (sock) &&
+	    soup_message_is_keepalive (msg) &&
+	    priv->listeners) {
 		start_request (server, client);
 	} else {
-		soup_socket_disconnect (sock);
+		soup_socket_disconnect (client->sock);
 		soup_client_context_unref (client);
 	}
 	g_object_unref (msg);
-	g_object_unref (sock);
 }
 
+/* "" was never documented as meaning the same thing as "/", but it
+ * effectively was. We have to special case it now or otherwise it
+ * would match "*" too.
+ */
+#define NORMALIZED_PATH(path) ((path) && *(path) ? (path) : "/")
+
 static SoupServerHandler *
-soup_server_get_handler (SoupServer *server, const char *path)
+get_handler (SoupServer *server, SoupMessage *msg)
 {
-	SoupServerPrivate *priv;
-	SoupServerHandler *hand;
+	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (server);
+	SoupURI *uri;
 
-	g_return_val_if_fail (SOUP_IS_SERVER (server), NULL);
-	priv = SOUP_SERVER_GET_PRIVATE (server);
+	uri = soup_message_get_uri (msg);
+	return soup_path_map_lookup (priv->handlers, NORMALIZED_PATH (uri->path));
+}
 
-	if (path) {
-		hand = soup_path_map_lookup (priv->handlers, path);
-		if (hand)
-			return hand;
-		if (!strcmp (path, "*"))
-			return NULL;
+static void
+call_handler (SoupServer *server, SoupServerHandler *handler,
+	      SoupClientContext *client, SoupMessage *msg,
+	      gboolean early)
+{
+	GHashTable *form_data_set;
+	SoupURI *uri;
+
+	if (early && !handler->early_callback)
+		return;
+	else if (!early && !handler->callback)
+		return;
+
+	if (msg->status_code != 0)
+		return;
+
+	uri = soup_message_get_uri (msg);
+	if (uri->query)
+		form_data_set = soup_form_decode (uri->query);
+	else
+		form_data_set = NULL;
+
+	if (early) {
+		(*handler->early_callback) (server, msg,
+					    uri->path, form_data_set,
+					    client, handler->early_user_data);
+	} else {
+		(*handler->callback) (server, msg,
+				      uri->path, form_data_set,
+				      client, handler->user_data);
 	}
-	return priv->default_handler;
+
+	if (form_data_set)
+		g_hash_table_unref (form_data_set);
 }
 
 static void
@@ -1173,6 +1272,7 @@ got_headers (SoupMessage *msg, SoupClientContext *client)
 {
 	SoupServer *server = client->server;
 	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (server);
+	SoupServerHandler *handler;
 	SoupURI *uri;
 	SoupDate *date;
 	char *date_string;
@@ -1180,6 +1280,17 @@ got_headers (SoupMessage *msg, SoupClientContext *client)
 	GSList *iter;
 	gboolean rejected = FALSE;
 	char *auth_user;
+
+	/* Add required response headers */
+	date = soup_date_new_from_now (0);
+	date_string = soup_date_to_string (date, SOUP_DATE_HTTP);
+	soup_message_headers_replace (msg->response_headers, "Date",
+				      date_string);
+	g_free (date_string);
+	soup_date_free (date);
+
+	if (msg->status_code != 0)
+		return;
 
 	uri = soup_message_get_uri (msg);
 	if ((soup_socket_is_ssl (client->sock) && !soup_uri_is_https (uri, priv->https_aliases)) ||
@@ -1205,14 +1316,6 @@ got_headers (SoupMessage *msg, SoupClientContext *client)
 		g_free (decoded_path);
 	}
 
-	/* Add required response headers */
-	date = soup_date_new_from_now (0);
-	date_string = soup_date_to_string (date, SOUP_DATE_HTTP);
-	soup_message_headers_replace (msg->response_headers, "Date",
-				      date_string);
-	g_free (date_string);
-	soup_date_free (date);
-	
 	/* Now handle authentication. (We do this here so that if
 	 * the request uses "Expect: 100-continue", we can reject it
 	 * immediately rather than waiting for the request body to
@@ -1233,52 +1336,81 @@ got_headers (SoupMessage *msg, SoupClientContext *client)
 		}
 	}
 
-	/* If no auth domain rejected it, then it's ok. */
-	if (!rejected)
+	/* If any auth domain rejected it, then it will need authentication. */
+	if (rejected) {
+		for (iter = priv->auth_domains; iter; iter = iter->next) {
+			domain = iter->data;
+
+			if (soup_auth_domain_covers (domain, msg))
+				soup_auth_domain_challenge (domain, msg);
+		}
 		return;
-
-	for (iter = priv->auth_domains; iter; iter = iter->next) {
-		domain = iter->data;
-
-		if (soup_auth_domain_covers (domain, msg))
-			soup_auth_domain_challenge (domain, msg);
 	}
+
+	/* Otherwise, call the early handlers. */
+	handler = get_handler (server, msg);
+	if (handler)
+		call_handler (server, handler, client, msg, TRUE);
 }
 
 static void
-call_handler (SoupMessage *msg, SoupClientContext *client)
+complete_websocket_upgrade (SoupMessage *msg, gpointer user_data)
+{
+	SoupClientContext *client = user_data;
+	SoupServer *server = client->server;
+	SoupURI *uri = soup_message_get_uri (msg);
+	SoupServerHandler *handler;
+	GIOStream *stream;
+	SoupWebsocketConnection *conn;
+
+	handler = get_handler (server, msg);
+	if (!handler || !handler->websocket_callback)
+		return;
+
+	soup_client_context_ref (client);
+	stream = soup_client_context_steal_connection (client);
+	conn = soup_websocket_connection_new (stream, uri,
+					      SOUP_WEBSOCKET_CONNECTION_SERVER,
+					      soup_message_headers_get_one (msg->request_headers, "Origin"),
+					      soup_message_headers_get_one (msg->response_headers, "Sec-WebSocket-Protocol"));
+	g_object_unref (stream);
+	soup_client_context_unref (client);
+
+	(*handler->websocket_callback) (server, conn, uri->path, client,
+					handler->websocket_user_data);
+	g_object_unref (conn);
+	soup_client_context_unref (client);
+}
+
+static void
+got_body (SoupMessage *msg, SoupClientContext *client)
 {
 	SoupServer *server = client->server;
-	SoupServerHandler *hand;
-	SoupURI *uri;
+	SoupServerHandler *handler;
 
 	g_signal_emit (server, signals[REQUEST_READ], 0, msg, client);
 
 	if (msg->status_code != 0)
 		return;
 
-	uri = soup_message_get_uri (msg);
-	hand = soup_server_get_handler (server, uri->path);
-	if (!hand) {
+	handler = get_handler (server, msg);
+	if (!handler) {
 		soup_message_set_status (msg, SOUP_STATUS_NOT_FOUND);
 		return;
 	}
 
-	if (hand->callback) {
-		GHashTable *form_data_set;
+	call_handler (server, handler, client, msg, FALSE);
+	if (msg->status_code != 0)
+		return;
 
-		if (uri->query)
-			form_data_set = soup_form_decode (uri->query);
-		else
-			form_data_set = NULL;
-
-		/* Call method handler */
-		(*hand->callback) (server, msg,
-				   uri->path, form_data_set,
-				   client, hand->user_data);
-
-		if (form_data_set)
-			g_hash_table_unref (form_data_set);
+	if (handler->websocket_callback) {
+		if (soup_websocket_server_process_handshake (msg,
+							     handler->websocket_origin,
+							     handler->websocket_protocols)) {
+			g_signal_connect (msg, "wrote-informational",
+					  G_CALLBACK (complete_websocket_upgrade),
+					  soup_client_context_ref (client));
+		}
 	}
 }
 
@@ -1302,12 +1434,10 @@ start_request (SoupServer *server, SoupClientContext *client)
 	}
 
 	g_signal_connect (msg, "got_headers", G_CALLBACK (got_headers), client);
-	g_signal_connect (msg, "got_body", G_CALLBACK (call_handler), client);
+	g_signal_connect (msg, "got_body", G_CALLBACK (got_body), client);
 
 	g_signal_emit (server, signals[REQUEST_STARTED], 0,
 		       msg, client);
-
-	g_object_ref (client->sock);
 
 	soup_message_read_request (msg, client->sock,
 				   priv->legacy_iface == NULL,
@@ -1320,22 +1450,80 @@ socket_disconnected (SoupSocket *sock, SoupClientContext *client)
 	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (client->server);
 
 	priv->clients = g_slist_remove (priv->clients, client);
-	g_signal_handlers_disconnect_by_func (sock, socket_disconnected, client);
+
+	if (client->msg) {
+		soup_message_set_status (client->msg, SOUP_STATUS_IO_ERROR);
+		soup_message_io_finished (client->msg);
+	}
+}
+
+static void
+soup_server_accept_socket (SoupServer *server,
+			   SoupSocket *sock)
+{
+	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (server);
+	SoupClientContext *client;
+
+	client = soup_client_context_new (server, sock);
+	priv->clients = g_slist_prepend (priv->clients, client);
+	start_request (server, client);
+}
+
+/**
+ * soup_server_accept_iostream:
+ * @server: a #SoupServer
+ * @stream: a #GIOStream
+ * @local_addr: (allow-none): the local #GSocketAddress associated with the @stream
+ * @remote_addr: (allow-none): the remote #GSocketAddress associated with the @stream
+ * @error: return location for a #GError
+ *
+ * Add a new client stream to the @server.
+ *
+ * Return value: %TRUE on success, %FALSE if the stream could not be
+ * accepted or any other error occurred (in which case @error will be
+ * set).
+ *
+ * Since: 2.50
+ **/
+gboolean
+soup_server_accept_iostream   (SoupServer     *server,
+			       GIOStream      *stream,
+			       GSocketAddress *local_addr,
+			       GSocketAddress *remote_addr,
+			       GError        **error)
+{
+	SoupSocket *sock;
+	SoupAddress *local = NULL, *remote = NULL;
+
+	if (local_addr)
+		local = soup_address_new_from_gsockaddr (local_addr);
+	if (remote_addr)
+		remote = soup_address_new_from_gsockaddr (remote_addr);
+
+	sock = g_initable_new (SOUP_TYPE_SOCKET, NULL, error,
+			       "iostream", stream,
+			       "local-address", local,
+			       "remote-address", remote,
+			       NULL);
+
+	g_clear_object (&local);
+	g_clear_object (&remote);
+
+	if (!sock)
+		return FALSE;
+
+	soup_server_accept_socket (server, sock);
 	g_object_unref (sock);
+
+	return TRUE;
 }
 
 static void
 new_connection (SoupSocket *listener, SoupSocket *sock, gpointer user_data)
 {
 	SoupServer *server = user_data;
-	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (server);
-	SoupClientContext *client;
 
-	client = soup_client_context_new (server, g_object_ref (sock));
-	priv->clients = g_slist_prepend (priv->clients, client);
-	g_signal_connect (sock, "disconnected",
-			  G_CALLBACK (socket_disconnected), client);
-	start_request (server, client);
+	soup_server_accept_socket (server, sock);
 }
 
 /**
@@ -1473,8 +1661,9 @@ void
 soup_server_disconnect (SoupServer *server)
 {
 	SoupServerPrivate *priv;
-	GSList *listeners, *iter;
+	GSList *listeners, *clients, *iter;
 	SoupSocket *listener;
+	SoupClientContext *client;
 
 	g_return_if_fail (SOUP_IS_SERVER (server));
 	priv = SOUP_SERVER_GET_PRIVATE (server);
@@ -1485,8 +1674,17 @@ soup_server_disconnect (SoupServer *server)
 		G_GNUC_END_IGNORE_DEPRECATIONS;
 	}
 
+	clients = priv->clients;
+	priv->clients = NULL;
 	listeners = priv->listeners;
 	priv->listeners = NULL;
+
+	for (iter = clients; iter; iter = iter->next) {
+		client = iter->data;
+		soup_socket_disconnect (client->sock);
+	}
+	g_slist_free (clients);
+
 	for (iter = listeners; iter; iter = iter->next) {
 		listener = iter->data;
 		soup_socket_disconnect (listener);
@@ -1539,15 +1737,13 @@ soup_server_listen_internal (SoupServer *server, SoupSocket *listener,
 		      SOUP_SOCKET_IS_SERVER, &is_listening,
 		      NULL);
 	if (!is_listening) {
-		if (!soup_socket_listen (listener)) {
+		if (!soup_socket_listen_full (listener, error)) {
 			SoupAddress *saddr = soup_socket_get_local_address (listener);
 
-			g_set_error (error,
-				     G_IO_ERROR,
-				     G_IO_ERROR_FAILED,
-				     _("Could not listen on address %s, port %d"),
-				     soup_address_get_physical (saddr),
-				     soup_address_get_port (saddr));
+			g_prefix_error (error,
+					_("Could not listen on address %s, port %d: "),
+					soup_address_get_physical (saddr),
+					soup_address_get_port (saddr));
 			return FALSE;
 		}
 	}
@@ -2039,8 +2235,8 @@ soup_client_context_get_socket (SoupClientContext *client)
  * not get fooled when the allocator reuses the memory address of a
  * previously-destroyed socket to represent a new socket.
  *
- * Return value: (transfer none): the #GSocket that @client is
- * associated with.
+ * Return value: (nullable) (transfer none): the #GSocket that @client is
+ * associated with, %NULL if you used soup_server_accept_iostream().
  *
  * Since: 2.48
  **/
@@ -2049,7 +2245,7 @@ soup_client_context_get_gsocket (SoupClientContext *client)
 {
 	g_return_val_if_fail (client != NULL, NULL);
 
-	return soup_socket_get_gsocket (client->sock);
+	return client->gsock;
 }
 
 /**
@@ -2059,8 +2255,9 @@ soup_client_context_get_gsocket (SoupClientContext *client)
  * Retrieves the #SoupAddress associated with the remote end
  * of a connection.
  *
- * Return value: (transfer none): the #SoupAddress associated with the
- * remote end of a connection.
+ * Return value: (nullable) (transfer none): the #SoupAddress
+ * associated with the remote end of a connection, it may be
+ * %NULL if you used soup_server_accept_iostream().
  *
  * Deprecated: Use soup_client_context_get_remote_address(), which returns
  * a #GSocketAddress.
@@ -2080,8 +2277,9 @@ soup_client_context_get_address (SoupClientContext *client)
  * Retrieves the #GSocketAddress associated with the remote end
  * of a connection.
  *
- * Return value: (transfer none): the #GSocketAddress associated with
- * the remote end of a connection.
+ * Return value: (nullable) (transfer none): the #GSocketAddress
+ * associated with the remote end of a connection, it may be
+ * %NULL if you used soup_server_accept_iostream().
  *
  * Since: 2.48
  **/
@@ -2090,8 +2288,13 @@ soup_client_context_get_remote_address (SoupClientContext *client)
 {
 	g_return_val_if_fail (client != NULL, NULL);
 
-	if (!client->remote_addr)
-		client->remote_addr = g_socket_get_remote_address (soup_client_context_get_gsocket (client), NULL);
+	if (client->remote_addr)
+		return client->remote_addr;
+
+	client->remote_addr = client->gsock ?
+		g_socket_get_remote_address (client->gsock, NULL) :
+		soup_address_get_gsockaddr (soup_socket_get_remote_address (client->sock));
+
 	return client->remote_addr;
 }
 
@@ -2102,8 +2305,9 @@ soup_client_context_get_remote_address (SoupClientContext *client)
  * Retrieves the #GSocketAddress associated with the local end
  * of a connection.
  *
- * Return value: (transfer none): the #GSocketAddress associated with
- * the local end of a connection.
+ * Return value: (nullable) (transfer none): the #GSocketAddress
+ * associated with the local end of a connection, it may be
+ * %NULL if you used soup_server_accept_iostream().
  *
  * Since: 2.48
  **/
@@ -2112,8 +2316,13 @@ soup_client_context_get_local_address (SoupClientContext *client)
 {
 	g_return_val_if_fail (client != NULL, NULL);
 
-	if (!client->local_addr)
-		client->local_addr = g_socket_get_local_address (soup_client_context_get_gsocket (client), NULL);
+	if (client->local_addr)
+		return client->local_addr;
+
+	client->local_addr = client->gsock ?
+		g_socket_get_local_address (client->gsock, NULL) :
+		soup_address_get_gsockaddr (soup_socket_get_local_address (client->sock));
+
 	return client->local_addr;
 }
 
@@ -2124,18 +2333,36 @@ soup_client_context_get_local_address (SoupClientContext *client)
  * Retrieves the IP address associated with the remote end of a
  * connection.
  *
- * Return value: the IP address associated with the remote end of a
- * connection.
+ * Return value: (nullable): the IP address associated with the remote
+ * end of a connection, it may be %NULL if you used
+ * soup_server_accept_iostream().
  **/
 const char *
 soup_client_context_get_host (SoupClientContext *client)
 {
-	SoupAddress *address;
+	g_return_val_if_fail (client != NULL, NULL);
 
-	G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
-	address = soup_client_context_get_address (client);
-	G_GNUC_END_IGNORE_DEPRECATIONS;
-	return soup_address_get_physical (address);
+	if (client->remote_ip)
+		return client->remote_ip;
+
+	if (client->gsock) {
+		GSocketAddress *addr = soup_client_context_get_remote_address (client);
+		GInetAddress *iaddr;
+
+		if (!addr || !G_IS_INET_SOCKET_ADDRESS (addr))
+			return NULL;
+		iaddr = g_inet_socket_address_get_address (G_INET_SOCKET_ADDRESS (addr));
+		client->remote_ip = g_inet_address_to_string (iaddr);
+	} else {
+		SoupAddress *addr;
+
+		G_GNUC_BEGIN_IGNORE_DEPRECATIONS;
+		addr = soup_client_context_get_address (client);
+		G_GNUC_END_IGNORE_DEPRECATIONS;
+		client->remote_ip = g_strdup (soup_address_get_physical (addr));
+	}
+
+	return client->remote_ip;
 }
 
 /**
@@ -2177,19 +2404,63 @@ soup_client_context_get_auth_user (SoupClientContext *client)
 }
 
 /**
+ * soup_client_context_steal_connection:
+ * @client: a #SoupClientContext
+ *
+ * "Steals" the HTTP connection associated with @client from its
+ * #SoupServer. This happens immediately, regardless of the current
+ * state of the connection; if the response to the current
+ * #SoupMessage has not yet finished being sent, then it will be
+ * discarded; you can steal the connection from a
+ * #SoupMessage:wrote-informational or #SoupMessage:wrote-body signal
+ * handler if you need to wait for part or all of the response to be
+ * sent.
+ *
+ * Note that when calling this function from C, @client will most
+ * likely be freed as a side effect.
+ *
+ * Return value: (transfer full): the #GIOStream formerly associated
+ *   with @client (or %NULL if @client was no longer associated with a
+ *   connection). No guarantees are made about what kind of #GIOStream
+ *   is returned.
+ *
+ * Since: 2.50
+ **/
+GIOStream *
+soup_client_context_steal_connection (SoupClientContext *client)
+{
+	GIOStream *stream;
+
+	g_return_val_if_fail (client != NULL, NULL);
+
+	soup_client_context_ref (client);
+
+	stream = soup_message_io_steal (client->msg);
+	if (stream) {
+		g_object_set_data_full (G_OBJECT (stream), "GSocket",
+					soup_socket_steal_gsocket (client->sock),
+					g_object_unref);
+	}
+
+	socket_disconnected (client->sock, client);
+	soup_client_context_unref (client);
+
+	return stream;
+}
+
+
+/**
  * SoupServerCallback:
  * @server: the #SoupServer
  * @msg: the message being processed
  * @path: the path component of @msg's Request-URI
  * @query: (element-type utf8 utf8) (allow-none): the parsed query
- *         component of @msg's Request-URI
+ *   component of @msg's Request-URI
  * @client: additional contextual information about the client
- * @user_data: the data passed to @soup_server_add_handler
+ * @user_data: the data passed to soup_server_add_handler() or
+ *   soup_server_add_early_handler().
  *
- * A callback used to handle requests to a #SoupServer. The callback
- * will be invoked after receiving the request body; @msg's
- * #SoupMessage:method, #SoupMessage:request_headers, and
- * #SoupMessage:request_body fields will be filled in.
+ * A callback used to handle requests to a #SoupServer.
  *
  * @path and @query contain the likewise-named components of the
  * Request-URI, subject to certain assumptions. By default,
@@ -2210,30 +2481,28 @@ soup_client_context_get_auth_user (SoupClientContext *client)
  * and call soup_message_get_uri() and parse the URI's query field
  * yourself.
  *
- * After determining what to do with the request, the callback must at
- * a minimum call soup_message_set_status() (or
- * soup_message_set_status_full()) on @msg to set the response status
- * code. Additionally, it may set response headers and/or fill in the
- * response body.
- *
- * If the callback cannot fully fill in the response before returning
- * (eg, if it needs to wait for information from a database, or
- * another network server), it should call soup_server_pause_message()
- * to tell #SoupServer to not send the response right away. When the
- * response is ready, call soup_server_unpause_message() to cause it
- * to be sent.
- *
- * To send the response body a bit at a time using "chunked" encoding,
- * first call soup_message_headers_set_encoding() to set
- * %SOUP_ENCODING_CHUNKED on the #SoupMessage:response_headers. Then call
- * soup_message_body_append() (or soup_message_body_append_buffer())
- * to append each chunk as it becomes ready, and
- * soup_server_unpause_message() to make sure it's running. (The
- * server will automatically pause the message if it is using chunked
- * encoding but no more chunks are available.) When you are done, call
- * soup_message_body_complete() to indicate that no more chunks are
- * coming.
+ * See soup_server_add_handler() and soup_server_add_early_handler()
+ * for details of what handlers can/should do.
  **/
+
+static SoupServerHandler *
+get_or_create_handler (SoupServer *server, const char *exact_path)
+{
+	SoupServerPrivate *priv = SOUP_SERVER_GET_PRIVATE (server);
+	SoupServerHandler *handler;
+
+	exact_path = NORMALIZED_PATH (exact_path);
+
+	handler = soup_path_map_lookup (priv->handlers, exact_path);
+	if (handler && !strcmp (handler->path, exact_path))
+		return handler;
+
+	handler = g_slice_new0 (SoupServerHandler);
+	handler->path = g_strdup (exact_path);
+	soup_path_map_add (priv->handlers, exact_path, handler);
+
+	return handler;
+}
 
 /**
  * soup_server_add_handler:
@@ -2243,15 +2512,43 @@ soup_client_context_get_auth_user (SoupClientContext *client)
  * @user_data: data for @callback
  * @destroy: destroy notifier to free @user_data
  *
- * Adds a handler to @server for requests under @path. See the
- * documentation for #SoupServerCallback for information about
- * how callbacks should behave.
+ * Adds a handler to @server for requests under @path. If @path is
+ * %NULL or "/", then this will be the default handler for all
+ * requests that don't have a more specific handler. (Note though that
+ * if you want to handle requests to the special "*" URI, you must
+ * explicitly register a handler for "*"; the default handler will not
+ * be used for that case.)
  *
- * If @path is %NULL or "/", then this will be the default handler for
- * all requests that don't have a more specific handler. Note though
- * that if you want to handle requests to the special "*" URI, you
- * must explicitly register a handler for "*"; the default handler
- * will not be used for that case.
+ * For requests under @path (that have not already been assigned a
+ * status code by a #SoupAuthDomain, an early #SoupServerHandler, or a
+ * signal handler), @callback will be invoked after receiving the
+ * request body; the message's #SoupMessage:method,
+ * #SoupMessage:request-headers, and #SoupMessage:request-body fields
+ * will be filled in.
+ *
+ * After determining what to do with the request, the callback must at
+ * a minimum call soup_message_set_status() (or
+ * soup_message_set_status_full()) on the message to set the response
+ * status code. Additionally, it may set response headers and/or fill
+ * in the response body.
+ *
+ * If the callback cannot fully fill in the response before returning
+ * (eg, if it needs to wait for information from a database, or
+ * another network server), it should call soup_server_pause_message()
+ * to tell @server to not send the response right away. When the
+ * response is ready, call soup_server_unpause_message() to cause it
+ * to be sent.
+ *
+ * To send the response body a bit at a time using "chunked" encoding,
+ * first call soup_message_headers_set_encoding() to set
+ * %SOUP_ENCODING_CHUNKED on the #SoupMessage:response-headers. Then call
+ * soup_message_body_append() (or soup_message_body_append_buffer())
+ * to append each chunk as it becomes ready, and
+ * soup_server_unpause_message() to make sure it's running. (The
+ * server will automatically pause the message if it is using chunked
+ * encoding but no more chunks are available.) When you are done, call
+ * soup_message_body_complete() to indicate that no more chunks are
+ * coming.
  **/
 void
 soup_server_add_handler (SoupServer            *server,
@@ -2260,38 +2557,153 @@ soup_server_add_handler (SoupServer            *server,
 			 gpointer               user_data,
 			 GDestroyNotify         destroy)
 {
-	SoupServerPrivate *priv;
-	SoupServerHandler *hand;
+	SoupServerHandler *handler;
 
 	g_return_if_fail (SOUP_IS_SERVER (server));
 	g_return_if_fail (callback != NULL);
-	priv = SOUP_SERVER_GET_PRIVATE (server);
 
-	/* "" was never documented as meaning the same this as "/",
-	 * but it effectively was. We have to special case it now or
-	 * otherwise it would match "*" too.
-	 */
-	if (path && (!*path || !strcmp (path, "/")))
-		path = NULL;
-
-	hand = g_slice_new0 (SoupServerHandler);
-	hand->path       = g_strdup (path);
-	hand->callback   = callback;
-	hand->destroy    = destroy;
-	hand->user_data  = user_data;
-
-	soup_server_remove_handler (server, path);
-	if (path)
-		soup_path_map_add (priv->handlers, path, hand);
-	else
-		priv->default_handler = hand;
-}
-
-static void
-unregister_handler (SoupServerHandler *handler)
-{
+	handler = get_or_create_handler (server, path);
 	if (handler->destroy)
 		handler->destroy (handler->user_data);
+
+	handler->callback   = callback;
+	handler->destroy    = destroy;
+	handler->user_data  = user_data;
+}
+
+/**
+ * soup_server_add_early_handler:
+ * @server: a #SoupServer
+ * @path: (allow-none): the toplevel path for the handler
+ * @callback: callback to invoke for requests under @path
+ * @user_data: data for @callback
+ * @destroy: destroy notifier to free @user_data
+ *
+ * Adds an "early" handler to @server for requests under @path. Note
+ * that "normal" and "early" handlers are matched up together, so if
+ * you add a normal handler for "/foo" and an early handler for
+ * "/foo/bar", then a request to "/foo/bar" (or any path below it)
+ * will run only the early handler. (But if you add both handlers at
+ * the same path, then both will get run.)
+ *
+ * For requests under @path (that have not already been assigned a
+ * status code by a #SoupAuthDomain or a signal handler), @callback
+ * will be invoked after receiving the request headers, but before
+ * receiving the request body; the message's #SoupMessage:method and
+ * #SoupMessage:request-headers fields will be filled in.
+ *
+ * Early handlers are generally used for processing requests with
+ * request bodies in a streaming fashion. If you determine that the
+ * request will contain a message body, normally you would call
+ * soup_message_body_set_accumulate() on the message's
+ * #SoupMessage:request-body to turn off request-body accumulation,
+ * and connect to the message's #SoupMessage::got-chunk signal to
+ * process each chunk as it comes in.
+ *
+ * To complete the message processing after the full message body has
+ * been read, you can either also connect to #SoupMessage::got-body,
+ * or else you can register a non-early handler for @path as well. As
+ * long as you have not set the #SoupMessage:status-code by the time
+ * #SoupMessage::got-body is emitted, the non-early handler will be
+ * run as well.
+ *
+ * Since: 2.50
+ **/
+void
+soup_server_add_early_handler (SoupServer            *server,
+			       const char            *path,
+			       SoupServerCallback     callback,
+			       gpointer               user_data,
+			       GDestroyNotify         destroy)
+{
+	SoupServerHandler *handler;
+
+	g_return_if_fail (SOUP_IS_SERVER (server));
+	g_return_if_fail (callback != NULL);
+
+	handler = get_or_create_handler (server, path);
+	if (handler->early_destroy)
+		handler->early_destroy (handler->early_user_data);
+
+	handler->early_callback   = callback;
+	handler->early_destroy    = destroy;
+	handler->early_user_data  = user_data;
+}
+
+/**
+ * SoupServerWebsocketCallback:
+ * @server: the #SoupServer
+ * @path: the path component of @msg's Request-URI
+ * @connection: the newly created WebSocket connection
+ * @client: additional contextual information about the client
+ * @user_data: the data passed to @soup_server_add_handler
+ *
+ * A callback used to handle WebSocket requests to a #SoupServer. The
+ * callback will be invoked after sending the handshake response back
+ * to the client (and is only invoked if the handshake was
+ * successful).
+ *
+ * @path contains the path of the Request-URI, subject to the same
+ * rules as #SoupServerCallback (qv).
+ **/
+
+/**
+ * soup_server_add_websocket_handler:
+ * @server: a #SoupServer
+ * @path: (allow-none): the toplevel path for the handler
+ * @origin: (allow-none): the origin of the connection
+ * @protocols: (allow-none) (array zero-terminated=1): the protocols
+ *   supported by this handler
+ * @callback: callback to invoke for successful WebSocket requests under @path
+ * @user_data: data for @callback
+ * @destroy: destroy notifier to free @user_data
+ *
+ * Adds a WebSocket handler to @server for requests under @path. (If
+ * @path is %NULL or "/", then this will be the default handler for
+ * all requests that don't have a more specific handler.)
+ *
+ * When a path has a WebSocket handler registered, @server will check
+ * incoming requests for WebSocket handshakes after all other handlers
+ * have run (unless some earlier handler has already set a status code
+ * on the message), and update the request's status, response headers,
+ * and response body accordingly.
+ *
+ * If @origin is non-%NULL, then only requests containing a matching
+ * "Origin" header will be accepted. If @protocols is non-%NULL, then
+ * only requests containing a compatible "Sec-WebSocket-Protocols"
+ * header will be accepted. More complicated requirements can be
+ * handled by adding a normal handler to @path, and having it perform
+ * whatever checks are needed (possibly calling
+ * soup_server_check_websocket_handshake() one or more times), and
+ * setting a failure status code if the handshake should be rejected.
+ **/
+void
+soup_server_add_websocket_handler (SoupServer                   *server,
+				   const char                   *path,
+				   const char                   *origin,
+				   char                        **protocols,
+				   SoupServerWebsocketCallback   callback,
+				   gpointer                      user_data,
+				   GDestroyNotify                destroy)
+{
+	SoupServerHandler *handler;
+
+	g_return_if_fail (SOUP_IS_SERVER (server));
+	g_return_if_fail (callback != NULL);
+
+	handler = get_or_create_handler (server, path);
+	if (handler->websocket_destroy)
+		handler->websocket_destroy (handler->websocket_user_data);
+	if (handler->websocket_origin)
+		g_free (handler->websocket_origin);
+	if (handler->websocket_protocols)
+		g_strfreev (handler->websocket_protocols);
+
+	handler->websocket_callback   = callback;
+	handler->websocket_destroy    = destroy;
+	handler->websocket_user_data  = user_data;
+	handler->websocket_origin     = g_strdup (origin);
+	handler->websocket_protocols  = g_strdupv (protocols);
 }
 
 /**
@@ -2299,31 +2711,17 @@ unregister_handler (SoupServerHandler *handler)
  * @server: a #SoupServer
  * @path: the toplevel path for the handler
  *
- * Removes the handler registered at @path.
+ * Removes all handlers (early and normal) registered at @path.
  **/
 void
 soup_server_remove_handler (SoupServer *server, const char *path)
 {
 	SoupServerPrivate *priv;
-	SoupServerHandler *hand;
 
 	g_return_if_fail (SOUP_IS_SERVER (server));
 	priv = SOUP_SERVER_GET_PRIVATE (server);
 
-	if (!path || !*path || !strcmp (path, "/")) {
-		if (priv->default_handler) {
-			unregister_handler (priv->default_handler);
-			free_handler (priv->default_handler);
-			priv->default_handler = NULL;
-		}
-		return;
-	}
-
-	hand = soup_path_map_lookup (priv->handlers, path);
-	if (hand && !strcmp (path, hand->path)) {
-		unregister_handler (hand);
-		soup_path_map_remove (priv->handlers, path);
-	}
+	soup_path_map_remove (priv->handlers, NORMALIZED_PATH (path));
 }
 
 /**
@@ -2421,4 +2819,3 @@ soup_server_unpause_message (SoupServer *server,
 
 	soup_message_io_unpause (msg);
 }
-

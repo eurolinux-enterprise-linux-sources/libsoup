@@ -41,7 +41,7 @@
  * @attach: Perform setup when a feature is added to a session
  * @detach: Perform cleanup when a feature is removed from a session
  * @request_queued: Proxies the session's #SoupSession::request_queued signal
- * @request_started: Proxies the session's #SoupSession::request_started signal
+ * @request_started: Proxies the session's #SoupSession::request_started signal. Deprecated 2.50. Use #SoupMessage::starting instead.
  * @request_unqueued: Proxies the session's #SoupSession::request_unqueued signal
  * @add_feature: adds a sub-feature to the main feature
  * @remove_feature: removes a sub-feature from the main feature
@@ -51,8 +51,6 @@
  *
  * Since: 2.24
  **/
-
-static void soup_session_feature_default_init (SoupSessionFeatureInterface *iface);
 
 G_DEFINE_INTERFACE (SoupSessionFeature, soup_session_feature, G_TYPE_OBJECT)
 
@@ -119,6 +117,9 @@ void
 soup_session_feature_attach (SoupSessionFeature *feature,
 			     SoupSession        *session)
 {
+	g_return_if_fail (SOUP_IS_SESSION_FEATURE (feature));
+	g_return_if_fail (SOUP_IS_SESSION (session));
+
 	SOUP_SESSION_FEATURE_GET_CLASS (feature)->attach (feature, session);
 }
 
@@ -138,6 +139,9 @@ void
 soup_session_feature_detach (SoupSessionFeature *feature,
 			     SoupSession        *session)
 {
+	g_return_if_fail (SOUP_IS_SESSION_FEATURE (feature));
+	g_return_if_fail (SOUP_IS_SESSION (session));
+
 	SOUP_SESSION_FEATURE_GET_CLASS (feature)->detach (feature, session);
 }
 

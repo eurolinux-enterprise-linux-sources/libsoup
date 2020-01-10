@@ -57,8 +57,10 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Whether or not GSSAPI libs are available */
+#undef LIBSOUP_HAVE_GSSAPI
+
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
 
 /* Samba's 'winbind' daemon helper 'ntlm_auth' which can be used for NTLM
@@ -95,3 +97,6 @@
 
 /* Version number of package */
 #undef VERSION
+
+/* defines how to decorate public symbols while building */
+#undef _SOUP_EXTERN

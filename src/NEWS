@@ -1,4 +1,279 @@
-Changes in libsoup from 2.48.0 to 2.48.1:
+Changes in libsoup from 2.55.90 to 2.56.0:
+
+	* Added SoupWebsocketConnection:max-incoming-payload-size
+          property, to override the default maximum incoming payload
+          size. [#770022, Ignacio Casal Quinteiro]
+
+	* Added soup-version.h symbols (in particular
+          soup_check_version()) to introspection. [#771439, Rico
+          Tzschichholz]
+
+	* Updated the copy of the public suffix list used by SoupTLD
+	  [#769650, Michael Catanzaro]
+
+	* Updated translations:
+	  British English, Greek, Polish
+
+Changes in libsoup from 2.54.1 to 2.55.90:
+
+	* Removed support for SSLv3 fallback; sites that reject TLS
+          1.x handshakes will now just fail with an error. (Firefox
+          and Chrome have both already switched to this behavior.)
+          [#765940, Dan Winship]
+
+	* Fixed the parsing of <double>s in the new GVariant-based
+          XMLRPC code. [#767707, Dan Winship]
+
+	* Fixed soup_server_set_ssl_cert_file(), which was added in
+          2.48 but didn't actually work... [patch on libsoup-list from
+          Sean DuBois]
+
+	* Added GObject properties to SoupLogger to make it
+          bindings-friendly. [#768053, Jonh Wendell]
+
+	* Fixed build error on FreeBSD [#765376, Ting-Wei Lan]
+
+	* Fixed build with certain new versions of glibc that define
+          "EOF" as a macro. [#768731, Philip Withnall]
+
+	* Updated m4/ax_code_coverage.m4 with support for lcov 1.12
+          [Philip Withnall]
+
+	* Updated po files for future gettext versions [Piotr Drąg]
+
+	* New/updated translations:
+	  Occitan, Scottish Gaelic
+
+Changes in libsoup from 2.54.0.1 to 2.54.1:
+
+	* *** IMPORTANT ***
+          Fixed an ABI break in 2.54.0 caused by adding a member to
+          SoupAuthClass; 2.54.1 is ABI-compatible with 2.53.92 and
+          earlier, but NOT with the anomalous 2.54.0. If you built
+          packages against 2.54.0, you will need to rebuild them
+          against 2.54.1.
+
+	* Fixed NTLM authentication when ntlm_auth from the latest
+          version of Samba is present. [#765106, Milan Crha]
+
+	* Updates to MSVC build, including for GSS-API support
+          [Chun-wei Fan]
+
+	* Updated translations:
+	  Friulian
+
+Changes in libsoup from 2.53.92 to 2.54.0.1:
+
+	* (2.54.0.1 fixes a build problem with the 2.54.0 tarball,
+          which would not build if you configured with
+          "--without-gnome". There are no other changes between 2.54.0
+          and 2.54.0.1.)
+
+	* Fixed examples/simple-httpd on Windows [#758759, Chun-wei
+          Fan]
+
+Changes in libsoup from 2.53.90 to 2.53.92:
+
+	* libsoup now supports HTTP "Negotiate"/GSSAPI/Kerberos
+          authentication. It must be enabled specifically by the
+          application and is also subject to certain other
+          restrictions, some of which are not yet controllable through
+          the API. [#587145, Guido Guenther, Tomas Popela, David
+          Woodhouse, Dan Winship]
+
+	* Added support for building under MSVC [#758759, Chun-wei
+          Fan]
+
+	* Fixed a problem with the 2.53.90 tarball that caused
+          translations to be mis-installed.
+
+	* Updated translations:
+	  Occitan
+
+Changes in libsoup from 2.53.2 to 2.53.90:
+
+	* NUL bytes in headers are now ignored [#760832, Dan Winship]
+
+	* Fixed transfer annotation of soup_form_decode* functions
+          [#743966, Lionel Landwerlin]
+
+	* Updated translations:
+	  Bulgarian, Latvian, Norwegian bokmål
+
+Changes in libsoup from 2.53.1 to 2.53.2:
+
+	* Fixed up symbol visibility handling for mingw by copying
+          GLib's system [Ignacio Casal Quinteiro, #757146]
+
+	* Finally marked the old SoupSessionAsync and SoupSessionSync
+          methods as deprecated [Ignacio Casal Quinteiro, Dan Winship,
+          #757146]
+
+	* Added libsoup-2.4.deps for valac [Rico Tzschichholz]
+
+	* Make it possible to build from git without gtk-doc being
+          installed [Ignacio Casal Quinteiro]
+
+	* Updated translations:
+	  Norwegian bokmål, Occitan
+
+Changes in libsoup from 2.52.1 to 2.53.1:
+
+	* Really fixed build under MinGW for sure this time [Ignacio
+          Casal Quinteiro]
+
+        * Fixed SoupServer Web Sockets code so that the
+	  SoupClientContext passed to a SoupServerWebsocketCallback is
+	  fully usable (rather than crashing when you try to do most
+	  things).
+
+Changes in libsoup from 2.52.0 to 2.52.1:
+
+	* Fixed build under MinGW [Chun-wei Fan]
+
+	* Fixed build with --disable-introspection [#755389, Quentin
+          Glidic]
+
+	* Fixed HTTP authentication protection space handling for
+          files directly under the root directory. [#755617, Carlos
+          Garcia Campos]
+
+	* Fixed a warning when loading data from SoupCache while using
+          an authenticated proxy. [#756076, Carlos Garcia Campos]
+
+	* Updated translations:
+	  German, Vietnamese
+
+Changes in libsoup from 2.51.92 to 2.52.0:
+
+	* Removed duplicate test paths from tests/date so it will pass
+          with glib 2.46.0
+
+Changes in libsoup from 2.51.90 to 2.51.92:
+
+	* Added g_autoptr() support for all libsoup types. [#754721,
+          Kalev Lember]
+
+	* Added a missing (allow-none) annotation to
+          soup_uri_normalize() [#754776, Jens Georg]
+
+	* Updated translations:
+	  Polish
+
+Changes in libsoup from 2.51.3 to 2.51.90:
+
+	* Added a new GVariant-based XMLRPC API, and deprecated the
+          old GValue-based API (along with the associated
+          GValue-manipulating utilities). [#746495, Xavier Claessens]
+
+	* Multiple build fixes for Visual Studio [#752952, Chun-wei Fan]
+
+	* Added VAPI generation [#750679, Daniel Espinosa]
+
+	* Fixed the mode bits on soup-cookie.c, which was previously
+          marked executable for some reason. [rh #1247285]
+
+	* Updated translations:
+	  Norwegian bokmål, Portuguese, Thai, Turkish
+
+Changes in libsoup from 2.50.0 to 2.51.3:
+
+	* Fixed "make check" in non-English locales [rh #1224989,
+	  #749397]
+
+	* Fixed some compiler warnings [#748514, Philip Withnall]
+
+	* New/Updated translations:
+	  Aragonese, Catalan, Occitan, Russian
+
+Changes in libsoup from 2.49.92 to 2.50:
+
+	* Updated translations:
+	  Basque, Chinese (Taiwan), Danish, Indonesian,
+	  Norwegian bokmål
+
+Changes in libsoup from 2.49.91.1 to 2.49.92:
+
+	* Fixed an NTLM problem that caused spurious "Authentication
+          Failed" errors in evolution-ews. [#735197]
+
+	* New/updated translations:
+	  Bosnian, Czech, Greek, Hebrew, Italian, Korean, Lithuanian,
+	  Polish, Serbian, Slovak, Slovenian, Spanish, Swedish
+
+Changes in libsoup from 2.49.1 to 2.49.91.1:
+
+	* WebSockets! Libsoup now has support for WebSockets in both
+	  SoupSession and SoupServer. [#627738, Dan Winship and Lionel
+	  Landwerlin, based on code from the Cockpit project]
+
+	      * The WebSocket code in libsoup 2.49.91 did not build on
+                32-bit architectures. 2.49.91.1 was released to fix
+                this.
+
+	* Added support for NTLMv2 Session Security to SoupAuthNTLM.
+          (This is transparent to the app/user; if the server supports
+          it, it will be used.) [#739192, Adam Seering]
+
+	* Added soup_server_accept_iostream() to allow feeding a
+          non-GSocketConnection GIOStream to SoupServer (eg, when
+          accepting HTTP requests on some other sort of connection).
+          [#744186, Marc-André Lureau]
+
+	* Added soup_session_steal_connection() and
+          soup_client_context_steal_connection(), to allow you to
+          steal a GIOStream from a SoupSession or SoupServer and then
+          use it for non-HTTP purposes. [#721343, Dan Winship]
+
+	* Added soup_server_add_early_handler(), for adding SoupServer
+          handlers to run at :got-headers time rather than :got-body
+          (eg, to set up a streaming read of the request body).
+          [#625645, Dan Winship]
+
+	* Added a new SOUP_MESSAGE_IGNORE_CONNECTION_LIMITS flag,
+          which can be used to bypass SoupSession:max-conns and
+          SoupSession:max-conns-per-host on a per-message basis.
+          [#744720, Carlos Garcia Campos]
+
+	* Multiple SoupCache fixes from Carlos Garcia Campos:
+
+	      * Leaked resources are now cleaned up when opening the
+                cache. [#667682]
+
+	      * The "Age" header is no longer added to cached
+                responses. [#741108]
+
+	      * Fixed the interpretation of the "must-revalidate"
+                directive to not be stricter than required. [#744468]
+
+	      * Messages retrieved from cache now behave slightly more
+                like non-cache messages in terms of SoupSession
+                signals and timing. [#744788] Additionally, there is a
+                new SoupMessage::starting signal, which is like
+                SoupSession::request-started, but emitted for cached
+                resources as well. [#731153]
+
+	* Fixed soup_session_cancel_message() to work reliably on
+          paused messages. [#745094, Sven Neumann]
+
+	* Added code-coverage support to the build. [#744744,
+          Marc-André Lureau]
+
+	* Fixed the library symbol check in "make check" to work when
+          building with linker options that result in slightly
+          different organization. [#741348, Iain Lane]
+
+	* Added a hack to SoupSessionFeature so that people will stop
+          re-reporting an old Eclipse bug against libsoup. [#710242]
+
+	* Miscellaneous bug and leak fixes in the test programs, leak
+          fixes in libsoup, and documentation updates.
+
+	* Updated translations:
+	  Brazilian Portuguese, French, Galician, Hungarian, Slovak,
+	  Slovenian, Spanish, Turkish
+
+Changes in libsoup from 2.48.0 to 2.49.1:
 
 	* Fixed a bug in the SoupMessage:event signal that broke
 	  evolution's ability to connect to https hosts with "bad"

@@ -5,6 +5,10 @@
  * Copyright (C) 2008 Red Hat, Inc.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string.h>
 
 #include "soup-multipart.h"
@@ -412,7 +416,7 @@ soup_multipart_to_message (SoupMultipart *multipart,
 	const char *name, *value;
 	GString *str;
 	GHashTable *params;
-	int i;
+	guint i;
 
 	params = g_hash_table_new (g_str_hash, g_str_equal);
 	g_hash_table_insert (params, "boundary", multipart->boundary);
@@ -476,7 +480,7 @@ static SoupMultipart *
 soup_multipart_copy (SoupMultipart *multipart)
 {
 	SoupMultipart *copy;
-	int i;
+	guint i;
 
 	copy = soup_multipart_new_internal (g_strdup (multipart->mime_type),
 					    g_strdup (multipart->boundary));

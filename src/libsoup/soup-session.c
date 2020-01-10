@@ -22,6 +22,8 @@
 #include "soup-proxy-resolver-wrapper.h"
 #include "soup-session-private.h"
 #include "soup-socket-private.h"
+#include "soup-websocket.h"
+#include "soup-websocket-connection.h"
 
 #define HOST_KEEP_ALIVE 5 * 60 * 1000 /* 5 min in msecs */
 
@@ -75,15 +77,6 @@
  * subtypes) have a #SoupContentDecoder by default.
  **/
 
-static void
-soup_init (void)
-{
-	bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
-#ifdef HAVE_BIND_TEXTDOMAIN_CODESET
-	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
-#endif
-}
-
 typedef struct {
 	SoupURI     *uri;
 	SoupAddress *addr;
@@ -92,8 +85,6 @@ typedef struct {
 	guint        num_conns;
 
 	guint        num_messages;
-
-	gboolean     ssl_fallback;
 
 	GSource     *keep_alive_src;
 	SoupSession *session;
@@ -179,9 +170,7 @@ static void async_send_request_running (SoupSession *session, SoupMessageQueueIt
 
 #define SOUP_SESSION_USER_AGENT_BASE "libsoup/" PACKAGE_VERSION
 
-G_DEFINE_TYPE_WITH_CODE (SoupSession, soup_session, G_TYPE_OBJECT,
-			 soup_init ();
-			 )
+G_DEFINE_TYPE (SoupSession, soup_session, G_TYPE_OBJECT)
 
 enum {
 	REQUEST_QUEUED,
@@ -454,7 +443,7 @@ accept_languages_from_system (void)
 	GPtrArray *langs = NULL;
 	char *lang, *langs_str;
 	int delta;
-	int i;
+	guint i;
 
 	lang_names = g_get_language_names ();
 	g_return_val_if_fail (lang_names != NULL, NULL);
@@ -1251,6 +1240,7 @@ soup_session_set_item_connection (SoupSession          *session,
 	}
 
 	item->conn = conn;
+	item->conn_is_dedicated = FALSE;
 	soup_message_set_connection (item->msg, conn);
 
 	if (item->conn) {
@@ -1316,7 +1306,6 @@ soup_session_send_queue_item (SoupSession *session,
 			      SoupMessageCompletionFn completion_cb)
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
-	const char *conn_header;
 
 	if (priv->user_agent) {
 		soup_message_headers_replace (item->msg->request_headers,
@@ -1336,15 +1325,17 @@ soup_session_send_queue_item (SoupSession *session,
 	 * a short period of time, as we wouldn't need to establish
 	 * new connections. Keep alive is implicit for HTTP 1.1.
 	 */
-	conn_header = soup_message_headers_get_list (item->msg->request_headers, "Connection");
-	if (!conn_header ||
-	    (!soup_header_contains (conn_header, "Keep-Alive") &&
-	     !soup_header_contains (conn_header, "close")))
+	if (!soup_message_headers_header_contains (item->msg->request_headers,
+						   "Connection", "Keep-Alive") &&
+	    !soup_message_headers_header_contains (item->msg->request_headers,
+						   "Connection", "close")) {
 		soup_message_headers_append (item->msg->request_headers,
 					     "Connection", "Keep-Alive");
+	}
 
 	g_signal_emit (session, signals[REQUEST_STARTED], 0,
 		       item->msg, soup_connection_get_socket (item->conn));
+	soup_message_starting (item->msg);
 	if (item->state == SOUP_MESSAGE_RUNNING)
 		soup_connection_send_request (item->conn, item, completion_cb, item);
 }
@@ -1438,9 +1429,6 @@ drop_connection (SoupSession *session, SoupSessionHost *host, SoupConnection *co
 								 host);
 			host->keep_alive_src = g_source_ref (host->keep_alive_src);
 		}
-
-		if (soup_connection_get_ssl_fallback (conn))
-			host->ssl_fallback = TRUE;
 	}
 
 	g_signal_handlers_disconnect_by_func (conn, connection_disconnected, session);
@@ -1493,10 +1481,13 @@ soup_session_unqueue_item (SoupSession          *session,
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupSessionHost *host;
+	SoupConnection *dedicated_conn = NULL;
 
 	if (item->conn) {
-		if (item->msg->method != SOUP_METHOD_CONNECT ||
-		    !SOUP_STATUS_IS_SUCCESSFUL (item->msg->status_code))
+		if (item->conn_is_dedicated)
+			dedicated_conn = g_object_ref (item->conn);
+		else if (item->msg->method != SOUP_METHOD_CONNECT ||
+			 !SOUP_STATUS_IS_SUCCESSFUL (item->msg->status_code))
 			soup_connection_set_state (item->conn, SOUP_CONNECTION_IDLE);
 		soup_session_set_item_connection (session, item, NULL);
 	}
@@ -1511,8 +1502,20 @@ soup_session_unqueue_item (SoupSession          *session,
 	g_mutex_lock (&priv->conn_lock);
 	host = get_host_for_message (session, item->msg);
 	host->num_messages--;
+	if (dedicated_conn) {
+		/* FIXME: Do not drop the connection if current number of connections
+		 * is no longer over the limits, just mark it as IDLE so it can be reused.
+		 */
+		g_hash_table_remove (priv->conns, dedicated_conn);
+		drop_connection (session, host, dedicated_conn);
+	}
 	g_cond_broadcast (&priv->conn_cond);
 	g_mutex_unlock (&priv->conn_lock);
+
+	if (dedicated_conn) {
+		soup_connection_disconnect (dedicated_conn);
+		g_object_unref (dedicated_conn);
+	}
 
 	/* g_signal_handlers_disconnect_by_func doesn't work if you
 	 * have a metamarshal, meaning it doesn't work with
@@ -1570,12 +1573,18 @@ soup_session_set_item_status (SoupSession          *session,
 
 
 static void
-message_completed (SoupMessage *msg, gboolean io_complete, gpointer user_data)
+message_completed (SoupMessage *msg, SoupMessageIOCompletion completion, gpointer user_data)
 {
 	SoupMessageQueueItem *item = user_data;
 
 	if (item->async)
 		soup_session_kick_queue (item->session);
+
+	if (completion == SOUP_MESSAGE_IO_STOLEN) {
+		item->state = SOUP_MESSAGE_FINISHED;
+		soup_session_unqueue_item (item->session, item);
+		return;
+	}
 
 	if (item->state != SOUP_MESSAGE_RESTARTING) {
 		item->state = SOUP_MESSAGE_FINISHING;
@@ -1593,19 +1602,7 @@ status_from_connect_error (SoupMessageQueueItem *item, GError *error)
 	if (!error)
 		return SOUP_STATUS_OK;
 
-	if (g_error_matches (error, G_TLS_ERROR, G_TLS_ERROR_NOT_TLS)) {
-		SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (item->session);
-		SoupSessionHost *host;
-
-		g_mutex_lock (&priv->conn_lock);
-		host = get_host_for_message (item->session, item->msg);
-		if (!host->ssl_fallback) {
-			host->ssl_fallback = TRUE;
-			status = SOUP_STATUS_TRY_AGAIN;
-		} else
-			status = SOUP_STATUS_SSL_FAILED;
-		g_mutex_unlock (&priv->conn_lock);
-	} else if (error->domain == G_TLS_ERROR)
+	if (error->domain == G_TLS_ERROR)
 		status = SOUP_STATUS_SSL_FAILED;
 	else if (error->domain == G_RESOLVER_ERROR)
 		status = SOUP_STATUS_CANT_RESOLVE;
@@ -1676,7 +1673,8 @@ tunnel_handshake_complete (GObject      *object,
 }
 
 static void
-tunnel_message_completed (SoupMessage *msg, gboolean io_complete, gpointer user_data)
+tunnel_message_completed (SoupMessage *msg, SoupMessageIOCompletion completion,
+			  gpointer user_data)
 {
 	SoupMessageQueueItem *tunnel_item = user_data;
 	SoupMessageQueueItem *item = tunnel_item->related;
@@ -1796,12 +1794,14 @@ get_connection_for_host (SoupSession *session,
 			 SoupMessageQueueItem *item,
 			 SoupSessionHost *host,
 			 gboolean need_new_connection,
-			 gboolean *try_cleanup)
+			 gboolean ignore_connection_limits,
+			 gboolean *try_cleanup,
+			 gboolean *is_dedicated_connection)
 {
 	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
 	SoupConnection *conn;
 	GSList *conns;
-	int num_pending = 0;
+	guint num_pending = 0;
 
 	if (priv->disposed)
 		return FALSE;
@@ -1824,24 +1824,35 @@ get_connection_for_host (SoupSession *session,
 	/* Limit the number of pending connections; num_messages / 2
 	 * is somewhat arbitrary...
 	 */
-	if (num_pending > host->num_messages / 2)
-		return NULL;
+	if (num_pending > host->num_messages / 2) {
+		if (!ignore_connection_limits)
+			return NULL;
+
+		*is_dedicated_connection = TRUE;
+	}
 
 	if (host->num_conns >= priv->max_conns_per_host) {
-		if (need_new_connection)
-			*try_cleanup = TRUE;
-		return NULL;
+		if (!ignore_connection_limits) {
+			if (need_new_connection)
+				*try_cleanup = TRUE;
+			return NULL;
+		}
+
+		*is_dedicated_connection = TRUE;
 	}
 
 	if (priv->num_conns >= priv->max_conns) {
-		*try_cleanup = TRUE;
-		return NULL;
+		if (!ignore_connection_limits) {
+			*try_cleanup = TRUE;
+			return NULL;
+		}
+
+		*is_dedicated_connection = TRUE;
 	}
 
 	ensure_socket_props (session);
 	conn = g_object_new (SOUP_TYPE_CONNECTION,
 			     SOUP_CONNECTION_REMOTE_URI, host->uri,
-			     SOUP_CONNECTION_SSL_FALLBACK, host->ssl_fallback,
 			     SOUP_CONNECTION_SOCKET_PROPERTIES, priv->socket_props,
 			     NULL);
 
@@ -1882,6 +1893,8 @@ get_connection (SoupMessageQueueItem *item, gboolean *should_cleanup)
 	SoupConnection *conn = NULL;
 	gboolean my_should_cleanup = FALSE;
 	gboolean need_new_connection;
+	gboolean ignore_connection_limits;
+	gboolean is_dedicated_connection = FALSE;
 
 	soup_session_cleanup_connections (session, FALSE);
 
@@ -1889,13 +1902,17 @@ get_connection (SoupMessageQueueItem *item, gboolean *should_cleanup)
 		(soup_message_get_flags (item->msg) & SOUP_MESSAGE_NEW_CONNECTION) ||
 		(!(soup_message_get_flags (item->msg) & SOUP_MESSAGE_IDEMPOTENT) &&
 		 !SOUP_METHOD_IS_IDEMPOTENT (item->msg->method));
+	ignore_connection_limits =
+		(soup_message_get_flags (item->msg) & SOUP_MESSAGE_IGNORE_CONNECTION_LIMITS);
 
 	g_mutex_lock (&priv->conn_lock);
 	host = get_host_for_message (session, item->msg);
 	while (TRUE) {
 		conn = get_connection_for_host (session, item, host,
 						need_new_connection,
-						&my_should_cleanup);
+						ignore_connection_limits,
+						&my_should_cleanup,
+						&is_dedicated_connection);
 		if (conn || item->async)
 			break;
 
@@ -1919,6 +1936,7 @@ get_connection (SoupMessageQueueItem *item, gboolean *should_cleanup)
 	}
 
 	soup_session_set_item_connection (session, item, conn);
+	item->conn_is_dedicated = is_dedicated_connection;
 
 	if (soup_connection_get_state (item->conn) != SOUP_CONNECTION_NEW) {
 		item->state = SOUP_MESSAGE_READY;
@@ -2372,7 +2390,13 @@ soup_session_real_cancel_message (SoupSession *session, SoupMessage *msg, guint 
 	item = soup_message_queue_lookup (priv->queue, msg);
 	g_return_if_fail (item != NULL);
 
-	item->paused = FALSE;
+	if (item->paused) {
+		item->paused = FALSE;
+
+		if (soup_message_io_in_progress (msg))
+			soup_message_io_unpause (msg);
+	}
+
 	soup_message_set_status (msg, status_code);
 	g_cancellable_cancel (item->cancellable);
 
@@ -3042,6 +3066,8 @@ soup_session_class_init (SoupSessionClass *session_class)
 	 * Emitted just before a request is sent. See
 	 * #SoupSession::request_queued for a detailed description of
 	 * the message lifecycle within a session.
+	 *
+	 * Deprecated: 2.50. Use #SoupMessage::starting instead.
 	 **/
 	signals[REQUEST_STARTED] =
 		g_signal_new ("request-started",
@@ -4031,6 +4057,17 @@ async_send_request_running (SoupSession *session, SoupMessageQueueItem *item)
 }
 
 static void
+cache_stream_finished (GInputStream         *stream,
+		       SoupMessageQueueItem *item)
+{
+	g_signal_handlers_disconnect_matched (stream, G_SIGNAL_MATCH_DATA,
+					      0, 0, NULL, NULL, item);
+	item->state = SOUP_MESSAGE_FINISHING;
+	soup_session_kick_queue (item->session);
+	soup_message_queue_item_unref (item);
+}
+
+static void
 async_return_from_cache (SoupMessageQueueItem *item,
 			 GInputStream         *stream)
 {
@@ -4045,7 +4082,10 @@ async_return_from_cache (SoupMessageQueueItem *item,
 		g_hash_table_unref (params);
 	}
 
-	item->state = SOUP_MESSAGE_FINISHING;
+	soup_message_queue_item_ref (item);
+	g_signal_connect (stream, "eof", G_CALLBACK (cache_stream_finished), item);
+	g_signal_connect (stream, "closed", G_CALLBACK (cache_stream_finished), item);
+
 	async_send_request_return_result (item, g_object_ref (stream), NULL);
 }
 
@@ -4647,4 +4687,202 @@ soup_request_error_quark (void)
 	if (!error)
 		error = g_quark_from_static_string ("soup_request_error_quark");
 	return error;
+}
+
+/**
+ * soup_session_steal_connection:
+ * @session: a #SoupSession
+ * @msg: the message whose connection is to be stolen
+ *
+ * "Steals" the HTTP connection associated with @msg from @session.
+ * This happens immediately, regardless of the current state of the
+ * connection, and @msg's callback will not be called. You can steal
+ * the connection from a #SoupMessage signal handler if you need to
+ * wait for part or all of the response to be received first.
+ *
+ * Calling this function may cause @msg to be freed if you are not
+ * holding any other reference to it.
+ *
+ * Return value: (transfer full): the #GIOStream formerly associated
+ *   with @msg (or %NULL if @msg was no longer associated with a
+ *   connection). No guarantees are made about what kind of #GIOStream
+ *   is returned.
+ *
+ * Since: 2.50
+ **/
+GIOStream *
+soup_session_steal_connection (SoupSession *session,
+			       SoupMessage *msg)
+{
+	SoupSessionPrivate *priv = SOUP_SESSION_GET_PRIVATE (session);
+	SoupMessageQueueItem *item;
+	SoupConnection *conn;
+	SoupSocket *sock;
+	SoupSessionHost *host;
+	GIOStream *stream;
+
+	item = soup_message_queue_lookup (priv->queue, msg);
+	if (!item)
+		return NULL;
+	if (!item->conn ||
+	    soup_connection_get_state (item->conn) != SOUP_CONNECTION_IN_USE) {
+		soup_message_queue_item_unref (item);
+		return NULL;
+	}
+
+	conn = g_object_ref (item->conn);
+	soup_session_set_item_connection (session, item, NULL);
+
+	g_mutex_lock (&priv->conn_lock);
+	host = get_host_for_message (session, item->msg);
+	g_hash_table_remove (priv->conns, conn);
+	drop_connection (session, host, conn);
+	g_mutex_unlock (&priv->conn_lock);
+
+	sock = soup_connection_get_socket (conn);
+	g_object_set (sock,
+		      SOUP_SOCKET_TIMEOUT, 0,
+		      NULL);
+
+	stream = soup_message_io_steal (item->msg);
+	g_object_set_data_full (G_OBJECT (stream), "GSocket",
+				soup_socket_steal_gsocket (sock),
+				g_object_unref);
+	g_object_unref (conn);
+
+	soup_message_queue_item_unref (item);
+	return stream;
+}
+
+static void websocket_connect_async_stop (SoupMessage *msg, gpointer user_data);
+
+static void
+websocket_connect_async_complete (SoupSession *session, SoupMessage *msg, gpointer user_data)
+{
+	GTask *task = user_data;
+
+	/* Disconnect websocket_connect_async_stop() handler. */
+	g_signal_handlers_disconnect_matched (msg, G_SIGNAL_MATCH_DATA,
+					      0, 0, NULL, NULL, task);
+
+	g_task_return_new_error (task,
+				 SOUP_WEBSOCKET_ERROR, SOUP_WEBSOCKET_ERROR_NOT_WEBSOCKET,
+				 "%s", _("The server did not accept the WebSocket handshake."));
+	g_object_unref (task);
+}
+
+static void
+websocket_connect_async_stop (SoupMessage *msg, gpointer user_data)
+{
+	GTask *task = user_data;
+	SoupMessageQueueItem *item = g_task_get_task_data (task);
+	GIOStream *stream;
+	SoupWebsocketConnection *client;
+	GError *error = NULL;
+
+	/* Disconnect websocket_connect_async_stop() handler. */
+	g_signal_handlers_disconnect_matched (msg, G_SIGNAL_MATCH_DATA,
+					      0, 0, NULL, NULL, task);
+
+	if (soup_websocket_client_verify_handshake (item->msg, &error)){
+		stream = soup_session_steal_connection (item->session, item->msg);
+		client = soup_websocket_connection_new (stream, 
+							soup_message_get_uri (item->msg),
+							SOUP_WEBSOCKET_CONNECTION_CLIENT,
+							soup_message_headers_get_one (msg->request_headers, "Origin"),
+							soup_message_headers_get_one (msg->response_headers, "Sec-WebSocket-Protocol"));
+		g_object_unref (stream);
+
+		g_task_return_pointer (task, client, g_object_unref);
+	} else
+		g_task_return_error (task, error);
+	g_object_unref (task);
+}
+
+/**
+ * soup_session_websocket_connect_async:
+ * @session: a #SoupSession
+ * @msg: #SoupMessage indicating the WebSocket server to connect to
+ * @origin: (allow-none): origin of the connection
+ * @protocols: (allow-none) (array zero-terminated=1): a
+ *   %NULL-terminated array of protocols supported
+ * @cancellable: a #GCancellable
+ * @callback: the callback to invoke
+ * @user_data: data for @callback
+ *
+ * Asynchronously creates a #SoupWebsocketConnection to communicate
+ * with a remote server.
+ *
+ * All necessary WebSocket-related headers will be added to @msg, and
+ * it will then be sent and asynchronously processed normally
+ * (including handling of redirection and HTTP authentication).
+ *
+ * If the server returns "101 Switching Protocols", then @msg's status
+ * code and response headers will be updated, and then the WebSocket
+ * handshake will be completed. On success,
+ * soup_websocket_connect_finish() will return a new
+ * #SoupWebsocketConnection. On failure it will return a #GError.
+ *
+ * If the server returns a status other than "101 Switching
+ * Protocols", then @msg will contain the complete response headers
+ * and body from the server's response, and
+ * soup_websocket_connect_finish() will return
+ * %SOUP_WEBSOCKET_ERROR_NOT_WEBSOCKET.
+ *
+ * Since: 2.50
+ */
+void
+soup_session_websocket_connect_async (SoupSession          *session,
+				      SoupMessage          *msg,
+				      const char           *origin,
+				      char                **protocols,
+				      GCancellable         *cancellable,
+				      GAsyncReadyCallback   callback,
+				      gpointer              user_data)
+{
+	SoupMessageQueueItem *item;
+	GTask *task;
+
+	g_return_if_fail (SOUP_IS_SESSION (session));
+	g_return_if_fail (SOUP_SESSION_GET_PRIVATE (session)->use_thread_context);
+	g_return_if_fail (SOUP_IS_MESSAGE (msg));
+
+	soup_websocket_client_prepare_handshake (msg, origin, protocols);
+
+	task = g_task_new (session, cancellable, callback, user_data);
+	item = soup_session_append_queue_item (session, msg, TRUE, FALSE,
+					       websocket_connect_async_complete, task);
+	g_task_set_task_data (task, item, (GDestroyNotify) soup_message_queue_item_unref);
+
+	soup_message_add_status_code_handler (msg, "got-informational",
+					      SOUP_STATUS_SWITCHING_PROTOCOLS,
+					      G_CALLBACK (websocket_connect_async_stop), task);
+	soup_session_kick_queue (session);
+}
+
+/**
+ * soup_session_websocket_connect_finish:
+ * @session: a #SoupSession
+ * @result: the #GAsyncResult passed to your callback
+ * @error: return location for a #GError, or %NULL
+ *
+ * Gets the #SoupWebsocketConnection response to a
+ * soup_session_websocket_connect_async() call and (if successful),
+ * returns a #SoupWebsockConnection that can be used to communicate
+ * with the server.
+ *
+ * Return value: (transfer full): a new #SoupWebsocketConnection, or
+ *   %NULL on error.
+ *
+ * Since: 2.50
+ */
+SoupWebsocketConnection *
+soup_session_websocket_connect_finish (SoupSession      *session,
+				       GAsyncResult     *result,
+				       GError          **error)
+{
+	g_return_val_if_fail (SOUP_IS_SESSION (session), NULL);
+	g_return_val_if_fail (g_task_is_valid (result, session), NULL);
+
+	return g_task_propagate_pointer (G_TASK (result), error);
 }

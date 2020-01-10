@@ -5,6 +5,10 @@
  * Copyright (C) 2000-2003, Ximian, Inc.
  */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string.h>
 
 #include "soup-message.h"
@@ -109,6 +113,7 @@ enum {
 	GOT_BODY,
 	CONTENT_SNIFFED,
 
+	STARTING,
 	RESTARTED,
 	FINISHED,
 
@@ -597,6 +602,23 @@ soup_message_class_init (SoupMessageClass *message_class)
 			      G_TYPE_NONE, 2,
 			      G_TYPE_STRING,
 			      G_TYPE_HASH_TABLE);
+
+	/**
+	 * SoupMessage::starting:
+	 * @msg: the message
+	 *
+	 * Emitted just before a message is sent.
+	 *
+	 * Since: 2.50
+	 */
+	signals[STARTING] =
+		g_signal_new ("starting",
+			      G_OBJECT_CLASS_TYPE (object_class),
+			      G_SIGNAL_RUN_FIRST,
+			      G_STRUCT_OFFSET (SoupMessageClass, starting),
+			      NULL, NULL,
+			      NULL,
+			      G_TYPE_NONE, 0);
 
 	/**
 	 * SoupMessage::restarted:
@@ -1125,6 +1147,12 @@ soup_message_content_sniffed (SoupMessage *msg, const char *content_type, GHashT
 }
 
 void
+soup_message_starting (SoupMessage *msg)
+{
+	g_signal_emit (msg, signals[STARTING], 0);
+}
+
+void
 soup_message_restarted (SoupMessage *msg)
 {
 	SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (msg);
@@ -1421,6 +1449,12 @@ soup_message_cleanup_response (SoupMessage *msg)
  *   regardless its #SoupMessage:method, and allows reuse of existing
  *   idle connections, instead of always requiring a new one, unless
  *   #SOUP_MESSAGE_NEW_CONNECTION is set.
+ * @SOUP_MESSAGE_IGNORE_CONNECTION_LIMITS: Request that a new connection is
+ *   created for the message if there aren't idle connections available
+ *   and it's not possible to create new connections due to any of the
+ *   connection limits has been reached. If a dedicated connection is
+ *   eventually created for this message, it will be dropped when the
+ *   message finishes. Since 2.50
  *
  * Various flags that can be set on a #SoupMessage to alter its
  * behavior.
@@ -1528,13 +1562,6 @@ soup_message_get_http_version (SoupMessage *msg)
 gboolean
 soup_message_is_keepalive (SoupMessage *msg)
 {
-	const char *c_conn, *s_conn;
-
-	c_conn = soup_message_headers_get_list (msg->request_headers,
-						"Connection");
-	s_conn = soup_message_headers_get_list (msg->response_headers,
-						"Connection");
-
 	if (msg->status_code == SOUP_STATUS_OK &&
 	    msg->method == SOUP_METHOD_CONNECT)
 		return TRUE;
@@ -1550,13 +1577,15 @@ soup_message_is_keepalive (SoupMessage *msg)
 		 * doesn't request it. So ignore c_conn.
 		 */
 
-		if (!s_conn || !soup_header_contains (s_conn, "Keep-Alive"))
+		if (!soup_message_headers_header_contains (msg->response_headers,
+							   "Connection", "Keep-Alive"))
 			return FALSE;
 	} else {
 		/* Normally persistent unless either side requested otherwise */
-		if (c_conn && soup_header_contains (c_conn, "close"))
-			return FALSE;
-		if (s_conn && soup_header_contains (s_conn, "close"))
+		if (soup_message_headers_header_contains (msg->request_headers,
+							  "Connection", "close") ||
+		    soup_message_headers_header_contains (msg->response_headers,
+							  "Connection", "close"))
 			return FALSE;
 
 		return TRUE;

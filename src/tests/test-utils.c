@@ -66,6 +66,7 @@ test_init (int argc, char **argv, GOptionEntry *entries)
 	setlocale (LC_ALL, "");
 	g_setenv ("GSETTINGS_BACKEND", "memory", TRUE);
 	g_setenv ("GIO_USE_PROXY_RESOLVER", "dummy", TRUE);
+	g_setenv ("GIO_USE_VFS", "local", TRUE);
 
 	name = strrchr (argv[0], '/');
 	if (!name++)
@@ -237,20 +238,22 @@ soup_test_session_new (GType type, ...)
 	session = (SoupSession *)g_object_new_valist (type, propname, args);
 	va_end (args);
 
-	cafile = g_test_build_filename (G_TEST_DIST, "test-cert.pem", NULL);
-	tlsdb = g_tls_file_database_new (cafile, &error);
-	g_free (cafile);
-	if (error) {
-		if (g_strcmp0 (g_getenv ("GIO_USE_TLS"), "dummy") == 0)
-			g_clear_error (&error);
-		else
-			g_assert_no_error (error);
-	}
+	if (tls_available) {
+		cafile = g_test_build_filename (G_TEST_DIST, "test-cert.pem", NULL);
+		tlsdb = g_tls_file_database_new (cafile, &error);
+		g_free (cafile);
+		if (error) {
+			if (g_strcmp0 (g_getenv ("GIO_USE_TLS"), "dummy") == 0)
+				g_clear_error (&error);
+			else
+				g_assert_no_error (error);
+		}
 
-	g_object_set (G_OBJECT (session),
-		      SOUP_SESSION_TLS_DATABASE, tlsdb,
-		      NULL);
-	g_clear_object (&tlsdb);
+		g_object_set (G_OBJECT (session),
+			      SOUP_SESSION_TLS_DATABASE, tlsdb,
+			      NULL);
+		g_clear_object (&tlsdb);
+	}
 
 	if (http_debug_level && !logger) {
 		SoupLoggerLogLevel level = MIN ((SoupLoggerLogLevel)http_debug_level, SOUP_LOGGER_LOG_BODY);
@@ -277,10 +280,8 @@ static void
 server_listen (SoupServer *server)
 {
 	GError *error = NULL;
-	SoupServerListenOptions options =
-		GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (server), "listen-options"));
 
-	soup_server_listen_local (server, 0, options, &error);
+	soup_server_listen_local (server, 0, 0, &error);
 	if (error) {
 		g_printerr ("Unable to create server: %s\n", error->message);
 		exit (1);
@@ -294,6 +295,8 @@ static gpointer
 run_server_thread (gpointer user_data)
 {
 	SoupServer *server = user_data;
+	SoupTestServerOptions options =
+		GPOINTER_TO_UINT (g_object_get_data (G_OBJECT (server), "options"));
 	GMainContext *context;
 	GMainLoop *loop;
 
@@ -302,7 +305,8 @@ run_server_thread (gpointer user_data)
 	loop = g_main_loop_new (context, FALSE);
 	g_object_set_data (G_OBJECT (server), "GMainLoop", loop);
 
-	server_listen (server);
+	if (!(options & SOUP_TEST_SERVER_NO_DEFAULT_LISTENER))
+		server_listen (server);
 
 	g_mutex_lock (&server_start_mutex);
 	g_cond_signal (&server_start_cond);
@@ -354,16 +358,10 @@ soup_test_server_new (SoupTestServerOptions options)
 		g_mutex_lock (&server_start_mutex);
 
 		thread = g_thread_new ("server_thread", run_server_thread, server);
-		g_object_set_data (G_OBJECT (server), "thread", thread);
+		g_cond_wait (&server_start_cond, &server_start_mutex);
+		g_mutex_unlock (&server_start_mutex);
 
-		if (!(options & SOUP_TEST_SERVER_NO_DEFAULT_LISTENER)) {
-			/* We have to call soup_server_listen() from the server's
-			 * thread, but want to be sure we don't return from here
-			 * until it happens, hence the locking.
-			 */
-			g_cond_wait (&server_start_cond, &server_start_mutex);
-			g_mutex_unlock (&server_start_mutex);
-		}
+		g_object_set_data (G_OBJECT (server), "thread", thread);
 	} else if (!(options & SOUP_TEST_SERVER_NO_DEFAULT_LISTENER))
 		server_listen (server);
 
@@ -449,10 +447,6 @@ soup_test_server_get_uri (SoupServer    *server,
 		return uri;
 
 	/* Need to add a new listener */
-	uri = soup_uri_new (NULL);
-	soup_uri_set_scheme (uri, scheme);
-	soup_uri_set_host (uri, host);
-
 	loop = g_object_get_data (G_OBJECT (server), "GMainLoop");
 	if (loop) {
 		GMainContext *context = g_main_loop_get_context (loop);
@@ -482,8 +476,39 @@ soup_test_server_get_uri (SoupServer    *server,
 }
 
 static gboolean
-idle_quit_server (gpointer loop)
+done_waiting (gpointer user_data)
 {
+	gboolean *done = user_data;
+
+	*done = TRUE;
+	return FALSE;
+}
+
+static void
+disconnect_and_wait (SoupServer *server,
+		     GMainContext *context)
+{
+	GSource *source;
+	gboolean done = FALSE;
+
+	source = g_idle_source_new ();
+	g_source_set_priority (source, G_PRIORITY_LOW);
+	g_source_set_callback (source, done_waiting, &done, NULL);
+	g_source_attach (source, context);
+	g_source_unref (source);
+
+	soup_server_disconnect (server);
+	while (!done)
+		g_main_context_iteration (context, TRUE);
+}
+
+static gboolean
+idle_quit_server (gpointer user_data)
+{
+	SoupServer *server = user_data;
+	GMainLoop *loop = g_object_get_data (G_OBJECT (server), "GMainLoop");
+
+	disconnect_and_wait (server, g_main_loop_get_context (loop));
 	g_main_loop_quit (loop);
 	return FALSE;
 }
@@ -500,10 +525,12 @@ soup_test_server_quit_unref (SoupServer *server)
 
 		loop = g_object_get_data (G_OBJECT (server), "GMainLoop");
 		context = g_main_loop_get_context (loop);
-		soup_add_completion (context, idle_quit_server, loop);
+		g_main_context_ref (context);
+		soup_add_completion (context, idle_quit_server, server);
+		g_main_context_unref (context);
 		g_thread_join (thread);
 	} else
-		soup_server_disconnect (server);
+		disconnect_and_wait (server, NULL);
 
 	g_assert_cmpint (G_OBJECT (server)->ref_count, ==, 1);
 	g_object_unref (server);
@@ -554,7 +581,7 @@ create_cancel_data (SoupRequest          *req,
 	return cancel_data;
 }
 
-static void inline
+inline static void
 cancel_message_or_cancellable (CancelData *cancel_data)
 {
 	if (cancel_data->flags & SOUP_TEST_REQUEST_CANCEL_MESSAGE) {
@@ -615,7 +642,7 @@ soup_test_request_send (SoupRequest   *req,
 		g_timeout_add_full (G_PRIORITY_HIGH, interval, cancel_request_timeout, cancel_data, NULL);
 	}
 	if (cancel_data && (flags & SOUP_TEST_REQUEST_CANCEL_PREEMPTIVE))
-		g_cancellable_cancel (cancellable);
+		cancel_message_or_cancellable (cancel_data);
 	soup_request_send_async (req, cancellable, async_as_sync_callback, &data);
 	g_main_loop_run (data.loop);
 
