@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "soup-cookie-jar.h"
+#include "soup-misc-private.h"
 #include "soup.h"
 
 /**
@@ -27,12 +28,6 @@
  * Note that the base #SoupCookieJar class does not support any form
  * of long-term cookie persistence.
  **/
-
-static void soup_cookie_jar_session_feature_init (SoupSessionFeatureInterface *feature_interface, gpointer interface_data);
-
-G_DEFINE_TYPE_WITH_CODE (SoupCookieJar, soup_cookie_jar, G_TYPE_OBJECT,
-			 G_IMPLEMENT_INTERFACE (SOUP_TYPE_SESSION_FEATURE,
-						soup_cookie_jar_session_feature_init))
 
 enum {
 	CHANGED,
@@ -56,12 +51,18 @@ typedef struct {
 	guint serial;
 	SoupCookieJarAcceptPolicy accept_policy;
 } SoupCookieJarPrivate;
-#define SOUP_COOKIE_JAR_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SOUP_TYPE_COOKIE_JAR, SoupCookieJarPrivate))
+
+static void soup_cookie_jar_session_feature_init (SoupSessionFeatureInterface *feature_interface, gpointer interface_data);
+
+G_DEFINE_TYPE_WITH_CODE (SoupCookieJar, soup_cookie_jar, G_TYPE_OBJECT,
+                         G_ADD_PRIVATE (SoupCookieJar)
+			 G_IMPLEMENT_INTERFACE (SOUP_TYPE_SESSION_FEATURE,
+						soup_cookie_jar_session_feature_init))
 
 static void
 soup_cookie_jar_init (SoupCookieJar *jar)
 {
-	SoupCookieJarPrivate *priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	SoupCookieJarPrivate *priv = soup_cookie_jar_get_instance_private (jar);
 
 	priv->domains = g_hash_table_new_full (soup_str_case_hash,
 					       soup_str_case_equal,
@@ -73,7 +74,8 @@ soup_cookie_jar_init (SoupCookieJar *jar)
 static void
 soup_cookie_jar_constructed (GObject *object)
 {
-	SoupCookieJarPrivate *priv = SOUP_COOKIE_JAR_GET_PRIVATE (object);
+	SoupCookieJarPrivate *priv =
+		soup_cookie_jar_get_instance_private (SOUP_COOKIE_JAR (object));
 
 	priv->constructed = TRUE;
 }
@@ -81,7 +83,8 @@ soup_cookie_jar_constructed (GObject *object)
 static void
 soup_cookie_jar_finalize (GObject *object)
 {
-	SoupCookieJarPrivate *priv = SOUP_COOKIE_JAR_GET_PRIVATE (object);
+	SoupCookieJarPrivate *priv =
+		soup_cookie_jar_get_instance_private (SOUP_COOKIE_JAR (object));
 	GHashTableIter iter;
 	gpointer key, value;
 
@@ -99,7 +102,7 @@ soup_cookie_jar_set_property (GObject *object, guint prop_id,
 			      const GValue *value, GParamSpec *pspec)
 {
 	SoupCookieJarPrivate *priv =
-		SOUP_COOKIE_JAR_GET_PRIVATE (object);
+		soup_cookie_jar_get_instance_private (SOUP_COOKIE_JAR (object));
 
 	switch (prop_id) {
 	case PROP_READ_ONLY:
@@ -119,7 +122,7 @@ soup_cookie_jar_get_property (GObject *object, guint prop_id,
 			      GValue *value, GParamSpec *pspec)
 {
 	SoupCookieJarPrivate *priv =
-		SOUP_COOKIE_JAR_GET_PRIVATE (object);
+		soup_cookie_jar_get_instance_private (SOUP_COOKIE_JAR (object));
 
 	switch (prop_id) {
 	case PROP_READ_ONLY:
@@ -144,8 +147,6 @@ static void
 soup_cookie_jar_class_init (SoupCookieJarClass *jar_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (jar_class);
-
-	g_type_class_add_private (jar_class, sizeof (SoupCookieJarPrivate));
 
 	object_class->constructed = soup_cookie_jar_constructed;
 	object_class->finalize = soup_cookie_jar_finalize;
@@ -255,7 +256,7 @@ static void
 soup_cookie_jar_changed (SoupCookieJar *jar,
 			 SoupCookie *old, SoupCookie *new)
 {
-	SoupCookieJarPrivate *priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	SoupCookieJarPrivate *priv = soup_cookie_jar_get_instance_private (jar);
 
 	if (old && old != new)
 		g_hash_table_remove (priv->serials, old);
@@ -275,7 +276,7 @@ compare_cookies (gconstpointer a, gconstpointer b, gpointer jar)
 {
 	SoupCookie *ca = (SoupCookie *)a;
 	SoupCookie *cb = (SoupCookie *)b;
-	SoupCookieJarPrivate *priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	SoupCookieJarPrivate *priv = soup_cookie_jar_get_instance_private (jar);
 	int alen, blen;
 	guint aserial, bserial;
 
@@ -304,7 +305,7 @@ get_cookies (SoupCookieJar *jar, SoupURI *uri, gboolean for_http, gboolean copy_
 	char *domain, *cur, *next_domain;
 	GSList *new_head, *cookies_to_remove = NULL, *p;
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 
 	if (!uri->host)
 		return NULL;
@@ -462,7 +463,7 @@ soup_cookie_jar_add_cookie (SoupCookieJar *jar, SoupCookie *cookie)
 		return;
 	}
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 	old_cookies = g_hash_table_lookup (priv->domains, cookie->domain);
 	for (oc = old_cookies; oc; oc = oc->next) {
 		old_cookie = oc->data;
@@ -509,6 +510,38 @@ soup_cookie_jar_add_cookie (SoupCookieJar *jar, SoupCookie *cookie)
 	soup_cookie_jar_changed (jar, NULL, cookie);
 }
 
+static const char *
+normalize_cookie_domain (const char *domain)
+{
+	/* Trim any leading dot if present to transform the cookie
+         * domain into a valid hostname.
+         */
+	if (domain != NULL && domain[0] == '.')
+		return domain + 1;
+	return domain;
+}
+
+static gboolean
+incoming_cookie_is_third_party (SoupCookie *cookie, SoupURI *first_party)
+{
+	const char *normalized_cookie_domain;
+	const char *cookie_base_domain;
+	const char *first_party_base_domain;
+
+	if (first_party == NULL || first_party->host == NULL)
+		return TRUE;
+
+	normalized_cookie_domain = normalize_cookie_domain (cookie->domain);
+	cookie_base_domain = soup_tld_get_base_domain (normalized_cookie_domain, NULL);
+	if (cookie_base_domain == NULL)
+		cookie_base_domain = cookie->domain;
+
+	first_party_base_domain = soup_tld_get_base_domain (first_party->host, NULL);
+	if (first_party_base_domain == NULL)
+		first_party_base_domain = first_party->host;
+	return !soup_host_matches_host (cookie_base_domain, first_party_base_domain);
+}
+
 /**
  * soup_cookie_jar_add_cookie_with_first_party:
  * @jar: a #SoupCookieJar
@@ -535,14 +568,14 @@ soup_cookie_jar_add_cookie_with_first_party (SoupCookieJar *jar, SoupURI *first_
 	g_return_if_fail (first_party != NULL);
 	g_return_if_fail (cookie != NULL);
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 	if (priv->accept_policy == SOUP_COOKIE_JAR_ACCEPT_NEVER) {
 		soup_cookie_free (cookie);
 		return;
 	}
 
 	if (priv->accept_policy == SOUP_COOKIE_JAR_ACCEPT_ALWAYS ||
-	    soup_cookie_domain_matches (cookie, first_party->host)) {
+	    !incoming_cookie_is_third_party (cookie, first_party)) {
 		/* will steal or free soup_cookie */
 		soup_cookie_jar_add_cookie (jar, cookie);
 	} else {
@@ -581,7 +614,7 @@ soup_cookie_jar_set_cookie (SoupCookieJar *jar, SoupURI *uri,
 	if (!uri->host)
 		return;
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 	if (priv->accept_policy == SOUP_COOKIE_JAR_ACCEPT_NEVER)
 		return;
 
@@ -633,7 +666,7 @@ static void
 process_set_cookie_header (SoupMessage *msg, gpointer user_data)
 {
 	SoupCookieJar *jar = user_data;
-	SoupCookieJarPrivate *priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	SoupCookieJarPrivate *priv = soup_cookie_jar_get_instance_private (jar);
 	GSList *new_cookies, *nc;
 
 	if (priv->accept_policy == SOUP_COOKIE_JAR_ACCEPT_NEVER)
@@ -644,8 +677,7 @@ process_set_cookie_header (SoupMessage *msg, gpointer user_data)
 		SoupURI *first_party = soup_message_get_first_party (msg);
 		
 		if ((priv->accept_policy == SOUP_COOKIE_JAR_ACCEPT_NO_THIRD_PARTY &&
-		     first_party != NULL && first_party->host &&
-		     soup_cookie_domain_matches (nc->data, first_party->host)) ||
+		     !incoming_cookie_is_third_party (nc->data, first_party)) ||
 		    priv->accept_policy == SOUP_COOKIE_JAR_ACCEPT_ALWAYS)
 			soup_cookie_jar_add_cookie (jar, nc->data);
 		else
@@ -723,7 +755,7 @@ soup_cookie_jar_all_cookies (SoupCookieJar *jar)
 
 	g_return_val_if_fail (SOUP_IS_COOKIE_JAR (jar), NULL);
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 
 	g_hash_table_iter_init (&iter, priv->domains);
 
@@ -755,7 +787,7 @@ soup_cookie_jar_delete_cookie (SoupCookieJar *jar,
 	g_return_if_fail (SOUP_IS_COOKIE_JAR (jar));
 	g_return_if_fail (cookie != NULL);
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 
 	cookies = g_hash_table_lookup (priv->domains, cookie->domain);
 	if (cookies == NULL)
@@ -814,7 +846,7 @@ soup_cookie_jar_get_accept_policy (SoupCookieJar *jar)
 
 	g_return_val_if_fail (SOUP_IS_COOKIE_JAR (jar), SOUP_COOKIE_JAR_ACCEPT_ALWAYS);
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 	return priv->accept_policy;
 }
 
@@ -835,7 +867,7 @@ soup_cookie_jar_set_accept_policy (SoupCookieJar *jar,
 
 	g_return_if_fail (SOUP_IS_COOKIE_JAR (jar));
 
-	priv = SOUP_COOKIE_JAR_GET_PRIVATE (jar);
+	priv = soup_cookie_jar_get_instance_private (jar);
 
 	if (priv->accept_policy != policy) {
 		priv->accept_policy = policy;

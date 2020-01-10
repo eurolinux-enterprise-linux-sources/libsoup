@@ -323,7 +323,7 @@ soup_headers_parse_status_line (const char       *status_line,
 	if (code_end != code_start + 3)
 		return FALSE;
 	code = atoi (code_start);
-	if (code < 100 || code > 599)
+	if (code < 100 || code > 999)
 		return FALSE;
 	if (status_code)
 		*status_code = code;
@@ -630,10 +630,12 @@ gboolean
 soup_header_contains (const char *header, const char *token)
 {
 	const char *end;
-	guint len = strlen (token);
+	guint len;
 
 	g_return_val_if_fail (header != NULL, FALSE);
 	g_return_val_if_fail (token != NULL, FALSE);
+
+	len = strlen (token);
 
 	header = skip_delims (header, ',');
 	while (*header) {

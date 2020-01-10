@@ -1,5 +1,23 @@
+diff --git a/libsoup/soup-address.c b/libsoup/soup-address.c
+index 0351db50..9c0b0a45 100644
+--- a/libsoup/soup-address.c
++++ b/libsoup/soup-address.c
+@@ -1183,10 +1183,10 @@ got_addresses (SoupAddress *addr, guint status, gpointer user_data)
+ 	if (error)
+ 		g_task_return_error (task, g_error_copy (error));
+ 	else {
+-		GSocketAddress *addr;
++		GSocketAddress *socket_addr;
+ 
+-		addr = next_address (g_task_get_source_object (task));
+-		g_task_return_pointer (task, addr, g_object_unref);
++		socket_addr = next_address (g_task_get_source_object (task));
++		g_task_return_pointer (task, socket_addr, g_object_unref);
+ 	}
+ 	g_object_unref (task);
+ }
 diff --git a/libsoup/soup-auth-basic.c b/libsoup/soup-auth-basic.c
-index 5f1e718..d8b3226 100644
+index 5f1e7186..d8b32264 100644
 --- a/libsoup/soup-auth-basic.c
 +++ b/libsoup/soup-auth-basic.c
 @@ -74,7 +74,7 @@ soup_auth_basic_get_protection_space (SoupAuth *auth, SoupURI *source_uri)
@@ -11,21 +29,490 @@ index 5f1e718..d8b3226 100644
  		p[1] = '\0';
  	else if (p && p[1])
  		*p = '\0';
+diff --git a/libsoup/soup-auth-digest.c b/libsoup/soup-auth-digest.c
+index eda2a93c..45dd35be 100644
+--- a/libsoup/soup-auth-digest.c
++++ b/libsoup/soup-auth-digest.c
+@@ -343,7 +343,7 @@ soup_auth_digest_compute_response (const char        *method,
+ 	g_checksum_update (checksum, (guchar *)method, strlen (method));
+ 	g_checksum_update (checksum, (guchar *)":", 1);
+ 	g_checksum_update (checksum, (guchar *)uri, strlen (uri));
+-	strncpy (hex_a2, g_checksum_get_string (checksum), 33);
++	memcpy (hex_a2, g_checksum_get_string (checksum), sizeof (char) * 33);
+ 	g_checksum_free (checksum);
+ 
+ 	/* compute KD */
 diff --git a/libsoup/soup-auth-negotiate.c b/libsoup/soup-auth-negotiate.c
-index 94863d6..f94760c 100644
+index 1fdf142d..941e49be 100644
 --- a/libsoup/soup-auth-negotiate.c
 +++ b/libsoup/soup-auth-negotiate.c
-@@ -268,7 +268,7 @@ soup_auth_negotiate_update_connection (SoupConnectionAuth *auth, SoupMessage *ms
- 		} else {
+@@ -200,9 +200,9 @@ soup_auth_negotiate_get_connection_authorization (SoupConnectionAuth *auth,
  			/* FIXME: report further upward via
  			 * soup_message_get_error_message  */
--			g_warning ("gssapi step failed: %s", err->message);
-+			g_warning ("gssapi step failed: %s", err ? err->message : "Unknown error");
+ 			if (conn->initialized)
+-				g_warning ("gssapi step failed: %s", err->message);
++				g_warning ("gssapi step failed: %s", err ? err->message : "Internal error");
+ 			else
+-				g_warning ("gssapi init failed: %s", err->message);
++				g_warning ("gssapi init failed: %s", err ? err->message : "Internal error");
+ 			conn->state = SOUP_NEGOTIATE_FAILED;
+ 			g_clear_error (&err);
+ 
+@@ -274,9 +274,9 @@ soup_auth_negotiate_update_connection (SoupConnectionAuth *auth, SoupMessage *ms
+ 			/* FIXME: report further upward via
+ 			 * soup_message_get_error_message  */
+ 			if (conn->initialized)
+-				g_warning ("gssapi step failed: %s", err->message);
++				g_warning ("gssapi step failed: %s", err ? err->message : "Internal error");
+ 			else
+-				g_warning ("gssapi init failed: %s", err->message);
++				g_warning ("gssapi init failed: %s", err ? err->message : "Internal error");
  			success = FALSE;
  		}
  	} else if (!strncmp (header, "Negotiate ", 10)) {
+diff --git a/libsoup/soup-auth-ntlm.c b/libsoup/soup-auth-ntlm.c
+index 19a551ee..f4009aa8 100644
+--- a/libsoup/soup-auth-ntlm.c
++++ b/libsoup/soup-auth-ntlm.c
+@@ -810,7 +810,7 @@ soup_ntlm_response (const char *nonce,
+ 	ntlm_set_string (&resp.nt_resp, &offset, sizeof (nt_resp));
+ 
+ 	out = g_malloc (((offset + 3) * 4) / 3 + 6);
+-	strncpy (out, "NTLM ", 5);
++	memcpy (out, "NTLM ", 5);
+ 	p = out + 5;
+ 
+ 	state = save = 0;
+diff --git a/libsoup/soup-auth.c b/libsoup/soup-auth.c
+index 00aa405e..48f39359 100644
+--- a/libsoup/soup-auth.c
++++ b/libsoup/soup-auth.c
+@@ -107,13 +107,9 @@ soup_auth_get_property (GObject *object, guint prop_id,
+ 		g_value_set_string (value, soup_auth_get_scheme_name (auth));
+ 		break;
+ 	case PROP_REALM:
+-		if (auth->realm)
+-			g_free (auth->realm);
+ 		g_value_set_string (value, soup_auth_get_realm (auth));
+ 		break;
+ 	case PROP_HOST:
+-		if (priv->host)
+-			g_free (priv->host);
+ 		g_value_set_string (value, soup_auth_get_host (auth));
+ 		break;
+ 	case PROP_IS_FOR_PROXY:
+@@ -349,10 +345,12 @@ soup_auth_authenticate (SoupAuth *auth, const char *username, const char *passwo
+ gboolean
+ soup_auth_is_for_proxy (SoupAuth *auth)
+ {
+-	SoupAuthPrivate *priv = soup_auth_get_instance_private (auth);
++	SoupAuthPrivate *priv;
+ 
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), FALSE);
+ 
++	priv = soup_auth_get_instance_private (auth);
++
+ 	return priv->proxy;
+ }
+ 
+@@ -367,9 +365,14 @@ soup_auth_is_for_proxy (SoupAuth *auth)
+ const char *
+ soup_auth_get_scheme_name (SoupAuth *auth)
+ {
++	SoupAuthClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), NULL);
+ 
+-	return SOUP_AUTH_GET_CLASS (auth)->scheme_name;
++	klass = SOUP_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, NULL);
++
++	return klass->scheme_name;
+ }
+ 
+ /**
+@@ -383,10 +386,12 @@ soup_auth_get_scheme_name (SoupAuth *auth)
+ const char *
+ soup_auth_get_host (SoupAuth *auth)
+ {
+-	SoupAuthPrivate *priv = soup_auth_get_instance_private (auth);
++	SoupAuthPrivate *priv;
+ 
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), NULL);
+ 
++	priv = soup_auth_get_instance_private (auth);
++
+ 	return priv->host;
+ }
+ 
+@@ -423,13 +428,18 @@ soup_auth_get_realm (SoupAuth *auth)
+ char *
+ soup_auth_get_info (SoupAuth *auth)
+ {
++	SoupAuthClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), NULL);
+ 
++	klass = SOUP_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, NULL);
++
+ 	if (SOUP_IS_CONNECTION_AUTH (auth))
+-		return g_strdup (SOUP_AUTH_GET_CLASS (auth)->scheme_name);
++		return g_strdup (klass->scheme_name);
+ 	else {
+ 		return g_strdup_printf ("%s:%s",
+-					SOUP_AUTH_GET_CLASS (auth)->scheme_name,
++					klass->scheme_name,
+ 					auth->realm);
+ 	}
+ }
+@@ -445,9 +455,14 @@ soup_auth_get_info (SoupAuth *auth)
+ gboolean
+ soup_auth_is_authenticated (SoupAuth *auth)
+ {
++	SoupAuthClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), TRUE);
+ 
+-	return SOUP_AUTH_GET_CLASS (auth)->is_authenticated (auth);
++	klass = SOUP_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, TRUE);
++
++	return klass->is_authenticated (auth);
+ }
+ 
+ /**
+@@ -464,10 +479,15 @@ soup_auth_is_authenticated (SoupAuth *auth)
+ char *
+ soup_auth_get_authorization (SoupAuth *auth, SoupMessage *msg)
+ {
++	SoupAuthClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), NULL);
+ 	g_return_val_if_fail (msg != NULL, NULL);
+ 
+-	return SOUP_AUTH_GET_CLASS (auth)->get_authorization (auth, msg);
++	klass = SOUP_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, NULL);
++
++	return klass->get_authorization (auth, msg);
+ }
+ 
+ /**
+@@ -488,13 +508,18 @@ gboolean
+ soup_auth_is_ready (SoupAuth    *auth,
+ 		    SoupMessage *msg)
+ {
++	SoupAuthClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), TRUE);
+ 	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), TRUE);
+ 
+-	if (SOUP_AUTH_GET_CLASS (auth)->is_ready)
+-		return SOUP_AUTH_GET_CLASS (auth)->is_ready (auth, msg);
++	klass = SOUP_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, TRUE);
++
++	if (klass->is_ready)
++		return klass->is_ready (auth, msg);
+ 	else
+-		return SOUP_AUTH_GET_CLASS (auth)->is_authenticated (auth);
++		return klass->is_authenticated (auth);
+ }
+ 
+ /**
+@@ -511,9 +536,14 @@ soup_auth_is_ready (SoupAuth    *auth,
+ gboolean
+ soup_auth_can_authenticate (SoupAuth *auth)
+ {
++	SoupAuthClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), FALSE);
+ 
+-	return SOUP_AUTH_GET_CLASS (auth)->can_authenticate (auth);
++	klass = SOUP_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, FALSE);
++
++	return klass->can_authenticate (auth);
+ }
+ 
+ /**
+@@ -533,10 +563,15 @@ soup_auth_can_authenticate (SoupAuth *auth)
+ GSList *
+ soup_auth_get_protection_space (SoupAuth *auth, SoupURI *source_uri)
+ {
++	SoupAuthClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_AUTH (auth), NULL);
+ 	g_return_val_if_fail (source_uri != NULL, NULL);
+ 
+-	return SOUP_AUTH_GET_CLASS (auth)->get_protection_space (auth, source_uri);
++	klass = SOUP_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, NULL);
++
++	return klass->get_protection_space (auth, source_uri);
+ }
+ 
+ /**
+diff --git a/libsoup/soup-body-output-stream.c b/libsoup/soup-body-output-stream.c
+index 314d7ee9..58e9b3ee 100644
+--- a/libsoup/soup-body-output-stream.c
++++ b/libsoup/soup-body-output-stream.c
+@@ -162,7 +162,6 @@ again:
+ 	case SOUP_BODY_OUTPUT_STREAM_STATE_CHUNK_SIZE:
+ 		g_snprintf (buf, sizeof (bostream->priv->buf),
+ 			    "%lx\r\n", (gulong)count);
+-		len = strlen (buf);
+ 
+ 		if (count > 0)
+ 			bostream->priv->chunked_state = SOUP_BODY_OUTPUT_STREAM_STATE_CHUNK;
+@@ -182,13 +181,11 @@ again:
+ 
+ 	case SOUP_BODY_OUTPUT_STREAM_STATE_CHUNK_END:
+ 		strncpy (buf, "\r\n", sizeof (bostream->priv->buf));
+-		len = 2;
+ 		bostream->priv->chunked_state = SOUP_BODY_OUTPUT_STREAM_STATE_DONE;
+ 		break;
+ 
+ 	case SOUP_BODY_OUTPUT_STREAM_STATE_TRAILERS:
+ 		strncpy (buf, "\r\n", sizeof (bostream->priv->buf));
+-		len = 2;
+ 		bostream->priv->chunked_state = SOUP_BODY_OUTPUT_STREAM_STATE_DONE;
+ 		break;
+ 
+diff --git a/libsoup/soup-cache.c b/libsoup/soup-cache.c
+index 682625e6..63c13121 100644
+--- a/libsoup/soup-cache.c
++++ b/libsoup/soup-cache.c
+@@ -822,6 +822,9 @@ soup_cache_content_processor_wrap_input (SoupContentProcessor *processor,
+ 	StreamHelper *helper;
+ 	time_t request_time, response_time;
+ 
++	g_return_val_if_fail (SOUP_IS_CACHE (cache), NULL);
++	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), NULL);
++
+ 	/* First of all, check if we should cache the resource. */
+ 	cacheability = soup_cache_get_cacheability (cache, msg);
+ 	entry = soup_cache_entry_lookup (cache, msg);
+@@ -1075,6 +1078,9 @@ soup_cache_has_response (SoupCache *cache, SoupMessage *msg)
+ 	int max_age, max_stale, min_fresh;
+ 	GList *lru_item, *item;
+ 
++	g_return_val_if_fail (SOUP_IS_CACHE (cache), SOUP_CACHE_RESPONSE_STALE);
++	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), SOUP_CACHE_RESPONSE_STALE);
++
+ 	entry = soup_cache_entry_lookup (cache, msg);
+ 
+ 	/* 1. The presented Request-URI and that of stored response
+@@ -1226,10 +1232,15 @@ soup_cache_has_response (SoupCache *cache, SoupMessage *msg)
+ SoupCacheability
+ soup_cache_get_cacheability (SoupCache *cache, SoupMessage *msg)
+ {
++	SoupCacheClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_CACHE (cache), SOUP_CACHE_UNCACHEABLE);
+ 	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), SOUP_CACHE_UNCACHEABLE);
+ 
+-	return SOUP_CACHE_GET_CLASS (cache)->get_cacheability (cache, msg);
++	klass = SOUP_CACHE_GET_CLASS (cache);
++	g_return_val_if_fail (klass != NULL, SOUP_CACHE_UNCACHEABLE);
++
++	return klass->get_cacheability (cache, msg);
+ }
+ 
+ static gboolean
+@@ -1404,6 +1415,9 @@ soup_cache_cancel_conditional_request (SoupCache   *cache,
+ {
+ 	SoupCacheEntry *entry;
+ 
++	g_return_if_fail (SOUP_IS_CACHE (cache));
++	g_return_if_fail (SOUP_IS_MESSAGE (msg));
++
+ 	entry = soup_cache_entry_lookup (cache, msg);
+ 	if (entry)
+ 		entry->being_validated = FALSE;
+@@ -1415,7 +1429,12 @@ void
+ soup_cache_update_from_conditional_request (SoupCache   *cache,
+ 					    SoupMessage *msg)
+ {
+-	SoupCacheEntry *entry = soup_cache_entry_lookup (cache, msg);
++	SoupCacheEntry *entry;
++
++	g_return_if_fail (SOUP_IS_CACHE (cache));
++	g_return_if_fail (SOUP_IS_MESSAGE (msg));
++
++	entry = soup_cache_entry_lookup (cache, msg);
+ 	if (!entry)
+ 		return;
+ 
+diff --git a/libsoup/soup-connection-auth.c b/libsoup/soup-connection-auth.c
+index f55cfe6b..a44013e3 100644
+--- a/libsoup/soup-connection-auth.c
++++ b/libsoup/soup-connection-auth.c
+@@ -39,8 +39,14 @@ soup_connection_auth_free_connection_state (SoupConnectionAuth *auth,
+ 					    SoupConnection     *conn,
+ 					    gpointer            state)
+ {
++	SoupConnectionAuthClass *klass;
++
+ 	g_signal_handlers_disconnect_by_func (conn, G_CALLBACK (connection_disconnected), auth);
+-	SOUP_CONNECTION_AUTH_GET_CLASS (auth)->free_connection_state (auth, state);
++
++	klass = SOUP_CONNECTION_AUTH_GET_CLASS (auth);
++	g_return_if_fail (klass != NULL);
++
++	klass->free_connection_state (auth, state);
+ }
+ 
+ static void
+@@ -91,6 +97,7 @@ soup_connection_auth_get_connection_state_for_message (SoupConnectionAuth *auth,
+ 						       SoupMessage *msg)
+ {
+ 	SoupConnection *conn;
++	SoupConnectionAuthClass *klass;
+ 	gpointer state;
+ 
+ 	g_return_val_if_fail (SOUP_IS_CONNECTION_AUTH (auth), NULL);
+@@ -101,7 +108,10 @@ soup_connection_auth_get_connection_state_for_message (SoupConnectionAuth *auth,
+ 	if (state)
+ 		return state;
+ 
+-	state = SOUP_CONNECTION_AUTH_GET_CLASS (auth)->create_connection_state (auth);
++	klass = SOUP_CONNECTION_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, NULL);
++
++	state = klass->create_connection_state (auth);
+ 	if (conn) {
+ 		g_signal_connect (conn, "disconnected",
+ 				  G_CALLBACK (connection_disconnected), auth);
+@@ -117,12 +127,15 @@ soup_connection_auth_update (SoupAuth    *auth,
+ 			     GHashTable  *auth_params)
+ {
+ 	SoupConnectionAuth *cauth = SOUP_CONNECTION_AUTH (auth);
++	SoupConnectionAuthClass *klass = SOUP_CONNECTION_AUTH_GET_CLASS (auth);
+ 	gpointer conn = soup_connection_auth_get_connection_state_for_message (cauth, msg);
+ 	GHashTableIter iter;
+ 	GString *auth_header;
+ 	gpointer key, value;
+ 	gboolean result;
+ 
++	g_return_val_if_fail (klass != NULL, FALSE);
++
+ 	/* Recreate @auth_header out of @auth_params. If the
+ 	 * base64 data ended with 1 or more "="s, then it
+ 	 * will have been parsed as key=value. Otherwise
+@@ -147,8 +160,7 @@ soup_connection_auth_update (SoupAuth    *auth,
+ 		}
+ 	}
+ 
+-	result = SOUP_CONNECTION_AUTH_GET_CLASS (auth)->
+-		update_connection (cauth, msg, auth_header->str, conn);
++	result = klass->update_connection (cauth, msg, auth_header->str, conn);
+ 
+ 	g_string_free (auth_header, TRUE);
+ 	return result;
+@@ -159,10 +171,13 @@ soup_connection_auth_get_authorization (SoupAuth    *auth,
+ 					SoupMessage *msg)
+ {
+ 	SoupConnectionAuth *cauth = SOUP_CONNECTION_AUTH (auth);
++	SoupConnectionAuthClass *klass;
+ 	gpointer conn = soup_connection_auth_get_connection_state_for_message (cauth, msg);
+ 
+-	return SOUP_CONNECTION_AUTH_GET_CLASS (auth)->
+-		get_connection_authorization (cauth, msg, conn);
++	klass = SOUP_CONNECTION_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, NULL);
++
++	return klass->get_connection_authorization (cauth, msg, conn);
+ }
+ 
+ static gboolean
+@@ -170,10 +185,13 @@ soup_connection_auth_is_ready (SoupAuth    *auth,
+ 			       SoupMessage *msg)
+ {
+ 	SoupConnectionAuth *cauth = SOUP_CONNECTION_AUTH (auth);
++	SoupConnectionAuthClass *klass;
+ 	gpointer conn = soup_connection_auth_get_connection_state_for_message (cauth, msg);
+ 
+-	return SOUP_CONNECTION_AUTH_GET_CLASS (auth)->
+-		is_connection_ready (SOUP_CONNECTION_AUTH (auth), msg, conn);
++	klass = SOUP_CONNECTION_AUTH_GET_CLASS (auth);
++	g_return_val_if_fail (klass != NULL, FALSE);
++
++	return klass->is_connection_ready (SOUP_CONNECTION_AUTH (auth), msg, conn);
+ }
+ 
+ static void
+diff --git a/libsoup/soup-content-sniffer-stream.c b/libsoup/soup-content-sniffer-stream.c
+index b8a8c97e..7f74c705 100644
+--- a/libsoup/soup-content-sniffer-stream.c
++++ b/libsoup/soup-content-sniffer-stream.c
+@@ -167,7 +167,8 @@ read_internal (GInputStream  *stream,
+ 
+ 	if (sniffer->priv->buffer) {
+ 		nread = MIN (count, sniffer->priv->buffer_nread);
+-		memcpy (buffer, sniffer->priv->buffer, nread);
++		if (buffer)
++			memcpy (buffer, sniffer->priv->buffer, nread);
+ 		if (nread == sniffer->priv->buffer_nread) {
+ 			g_free (sniffer->priv->buffer);
+ 			sniffer->priv->buffer = NULL;
+diff --git a/libsoup/soup-content-sniffer.c b/libsoup/soup-content-sniffer.c
+index 7573fde5..20e10d71 100644
+--- a/libsoup/soup-content-sniffer.c
++++ b/libsoup/soup-content-sniffer.c
+@@ -925,11 +925,16 @@ soup_content_sniffer_sniff (SoupContentSniffer *sniffer,
+ 			    SoupMessage *msg, SoupBuffer *buffer,
+ 			    GHashTable **params)
+ {
++	SoupContentSnifferClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_CONTENT_SNIFFER (sniffer), NULL);
+ 	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), NULL);
+ 	g_return_val_if_fail (buffer != NULL, NULL);
+ 
+-	return SOUP_CONTENT_SNIFFER_GET_CLASS (sniffer)->sniff (sniffer, msg, buffer, params);
++	klass = SOUP_CONTENT_SNIFFER_GET_CLASS (sniffer);
++	g_return_val_if_fail (klass != NULL, NULL);
++
++	return klass->sniff (sniffer, msg, buffer, params);
+ }
+ 
+ /**
+@@ -946,7 +951,12 @@ soup_content_sniffer_sniff (SoupContentSniffer *sniffer,
+ gsize
+ soup_content_sniffer_get_buffer_size (SoupContentSniffer *sniffer)
+ {
++	SoupContentSnifferClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_CONTENT_SNIFFER (sniffer), 0);
+ 
+-	return SOUP_CONTENT_SNIFFER_GET_CLASS (sniffer)->get_buffer_size (sniffer);
++	klass = SOUP_CONTENT_SNIFFER_GET_CLASS (sniffer);
++	g_return_val_if_fail (klass != NULL, 0);
++
++	return klass->get_buffer_size (sniffer);
+ }
+diff --git a/libsoup/soup-cookie-jar.c b/libsoup/soup-cookie-jar.c
+index 2369c8a7..3996c62f 100644
+--- a/libsoup/soup-cookie-jar.c
++++ b/libsoup/soup-cookie-jar.c
+@@ -888,7 +888,12 @@ soup_cookie_jar_set_accept_policy (SoupCookieJar *jar,
+ gboolean
+ soup_cookie_jar_is_persistent (SoupCookieJar *jar)
+ {
++	SoupCookieJarClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_COOKIE_JAR (jar), FALSE);
+ 
+-	return SOUP_COOKIE_JAR_GET_CLASS (jar)->is_persistent (jar);
++	klass = SOUP_COOKIE_JAR_GET_CLASS (jar);
++	g_return_val_if_fail (klass != NULL, FALSE);
++
++	return klass->is_persistent (jar);
+ }
 diff --git a/libsoup/soup-message-headers.c b/libsoup/soup-message-headers.c
-index a180c6e..abef34c 100644
+index a180c6ee..abef34cb 100644
 --- a/libsoup/soup-message-headers.c
 +++ b/libsoup/soup-message-headers.c
 @@ -1324,7 +1324,7 @@ content_type_setter (SoupMessageHeaders *hdrs, const char *value)
@@ -37,8 +524,153 @@ index a180c6e..abef34c 100644
  
  		parse_content_foo (hdrs, "Content-Type", &content_type, NULL);
  		p = strpbrk (content_type, " /");
+diff --git a/libsoup/soup-session.c b/libsoup/soup-session.c
+index ae340b9c..42f38889 100644
+--- a/libsoup/soup-session.c
++++ b/libsoup/soup-session.c
+@@ -2175,11 +2175,15 @@ void
+ soup_session_queue_message (SoupSession *session, SoupMessage *msg,
+ 			    SoupSessionCallback callback, gpointer user_data)
+ {
++	SoupSessionClass *klass;
++
+ 	g_return_if_fail (SOUP_IS_SESSION (session));
+ 	g_return_if_fail (SOUP_IS_MESSAGE (msg));
+ 
+-	SOUP_SESSION_GET_CLASS (session)->queue_message (session, msg,
+-							 callback, user_data);
++	klass = SOUP_SESSION_GET_CLASS (session);
++	g_return_if_fail (klass != NULL);
++
++	klass->queue_message (session, msg, callback, user_data);
+ 	/* The SoupMessageQueueItem will hold a ref on @msg until it is
+ 	 * finished, so we can drop the ref adopted from the caller now.
+ 	 */
+@@ -2219,10 +2223,15 @@ soup_session_real_requeue_message (SoupSession *session, SoupMessage *msg)
+ void
+ soup_session_requeue_message (SoupSession *session, SoupMessage *msg)
+ {
++	SoupSessionClass *klass;
++
+ 	g_return_if_fail (SOUP_IS_SESSION (session));
+ 	g_return_if_fail (SOUP_IS_MESSAGE (msg));
+ 
+-	SOUP_SESSION_GET_CLASS (session)->requeue_message (session, msg);
++	klass = SOUP_SESSION_GET_CLASS (session);
++	g_return_if_fail (klass != NULL);
++
++	klass->requeue_message (session, msg);
+ }
+ 
+ static guint
+@@ -2266,10 +2275,15 @@ soup_session_real_send_message (SoupSession *session, SoupMessage *msg)
+ guint
+ soup_session_send_message (SoupSession *session, SoupMessage *msg)
+ {
++	SoupSessionClass *klass;
++
+ 	g_return_val_if_fail (SOUP_IS_SESSION (session), SOUP_STATUS_MALFORMED);
+ 	g_return_val_if_fail (SOUP_IS_MESSAGE (msg), SOUP_STATUS_MALFORMED);
+ 
+-	return SOUP_SESSION_GET_CLASS (session)->send_message (session, msg);
++	klass = SOUP_SESSION_GET_CLASS (session);
++	g_return_val_if_fail (klass != NULL, SOUP_STATUS_MALFORMED);
++
++	return klass->send_message (session, msg);
+ }
+ 
+ 
+@@ -2350,7 +2364,14 @@ soup_session_real_kick_queue (SoupSession *session)
+ void
+ soup_session_kick_queue (SoupSession *session)
+ {
+-	SOUP_SESSION_GET_CLASS (session)->kick (session);
++	SoupSessionClass *klass;
++
++	g_return_if_fail (SOUP_IS_SESSION (session));
++
++	klass = SOUP_SESSION_GET_CLASS (session);
++	g_return_if_fail (klass != NULL);
++
++	klass->kick (session);
+ }
+ 
+ /**
+@@ -2450,11 +2471,15 @@ soup_session_cancel_message (SoupSession *session, SoupMessage *msg,
+ 			     guint status_code)
+ {
+ 	SoupSessionPrivate *priv;
++	SoupSessionClass *klass;
+ 	SoupMessageQueueItem *item;
+ 
+ 	g_return_if_fail (SOUP_IS_SESSION (session));
+ 	g_return_if_fail (SOUP_IS_MESSAGE (msg));
+ 
++	klass = SOUP_SESSION_GET_CLASS (session);
++	g_return_if_fail (klass != NULL);
++
+ 	priv = soup_session_get_instance_private (session);
+ 	item = soup_message_queue_lookup (priv->queue, msg);
+ 	/* If the message is already ending, don't do anything */
+@@ -2465,7 +2490,7 @@ soup_session_cancel_message (SoupSession *session, SoupMessage *msg,
+ 		return;
+ 	}
+ 
+-	SOUP_SESSION_GET_CLASS (session)->cancel_message (session, msg, status_code);
++	klass->cancel_message (session, msg, status_code);
+ 	soup_message_queue_item_unref (item);
+ }
+ 
+@@ -2538,15 +2563,20 @@ soup_session_real_flush_queue (SoupSession *session)
+ void
+ soup_session_abort (SoupSession *session)
+ {
++	SoupSessionClass *klass;
+ 	SoupSessionPrivate *priv;
+ 	GSList *conns, *c;
+ 	GHashTableIter iter;
+ 	gpointer conn, host;
+ 
+ 	g_return_if_fail (SOUP_IS_SESSION (session));
++
++	klass = SOUP_SESSION_GET_CLASS (session);
++	g_return_if_fail (klass != NULL);
++
+ 	priv = soup_session_get_instance_private (session);
+ 
+-	SOUP_SESSION_GET_CLASS (session)->flush_queue (session);
++	klass->flush_queue (session);
+ 
+ 	/* Close all idle connections */
+ 	g_mutex_lock (&priv->conn_lock);
+diff --git a/libsoup/soup-status.h b/libsoup/soup-status.h
+index 28d481db..514dfc31 100644
+--- a/libsoup/soup-status.h
++++ b/libsoup/soup-status.h
+@@ -8,7 +8,7 @@
+ #ifndef SOUP_STATUS_H
+ #define SOUP_STATUS_H 1
+ 
+-#include <libsoup/soup-types.h>
++#include <libsoup/soup-version.h>
+ 
+ G_BEGIN_DECLS
+ 
+diff --git a/libsoup/soup-uri.c b/libsoup/soup-uri.c
+index be778d6c..74c362e9 100644
+--- a/libsoup/soup-uri.c
++++ b/libsoup/soup-uri.c
+@@ -1348,7 +1348,7 @@ soup_uri_is_http (SoupURI *uri, char **aliases)
+ 			return TRUE;
+ 	}
+ 
+-	if (!aliases[1] && !strcmp (aliases[0], "*"))
++	if (aliases[0] && !aliases[1] && !strcmp (aliases[0], "*"))
+ 		return TRUE;
+ 	else
+ 		return FALSE;
 diff --git a/libsoup/soup-xmlrpc.c b/libsoup/soup-xmlrpc.c
-index 42dcda9..2da6344 100644
+index 42dcda9c..60fb814c 100644
 --- a/libsoup/soup-xmlrpc.c
 +++ b/libsoup/soup-xmlrpc.c
 @@ -588,7 +588,7 @@ signature_get_next_complete_type (const char **signature)
@@ -46,15 +678,15 @@ index 42dcda9..2da6344 100644
  			(*signature)++;
  
 -			if ( (*signature)[0] == stack[stack_len - 1])
-+			if ( stack_len > 0 && (*signature)[0] == stack[stack_len - 1])
++			if (stack_len > 0 && (*signature)[0] == stack[stack_len - 1])
  				stack_len--;
  		} while (stack_len > 0);
  
 diff --git a/tests/test-utils.c b/tests/test-utils.c
-index 9c74206..fc58362 100644
+index 9c742060..7a21fa02 100644
 --- a/tests/test-utils.c
 +++ b/tests/test-utils.c
-@@ -676,6 +678,8 @@ soup_test_request_read_all (SoupRequest   *req,
+@@ -676,9 +676,11 @@ soup_test_request_read_all (SoupRequest   *req,
  
  	if (!SOUP_IS_SESSION_SYNC (soup_request_get_session (req)))
  		data.loop = g_main_loop_new (g_main_context_get_thread_default (), FALSE);
@@ -62,8 +694,12 @@ index 9c74206..fc58362 100644
 +		data.loop = NULL;
  
  	do {
- 		if (SOUP_IS_SESSION_SYNC (soup_request_get_session (req))) {
-@@ -691,7 +695,7 @@ soup_test_request_read_all (SoupRequest   *req,
+-		if (SOUP_IS_SESSION_SYNC (soup_request_get_session (req))) {
++		if (!data.loop) {
+ 			nread = g_input_stream_read (stream, buf, sizeof (buf),
+ 						     cancellable, error);
+ 		} else {
+@@ -691,7 +693,7 @@ soup_test_request_read_all (SoupRequest   *req,
  		}
  	} while (nread > 0);
  

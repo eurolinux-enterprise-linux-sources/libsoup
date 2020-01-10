@@ -94,6 +94,7 @@ typedef struct {
 static void io_run (SoupMessage *msg, gboolean blocking);
 
 #define RESPONSE_BLOCK_SIZE 8192
+#define HEADER_SIZE_LIMIT (64 * 1024)
 
 void
 soup_message_io_cleanup (SoupMessage *msg)
@@ -229,6 +230,8 @@ read_headers (SoupMessage *msg, gboolean blocking,
 							    cancellable, error);
 		io->read_header_buf->len = old_len + MAX (nread, 0);
 		if (nread == 0) {
+			if (io->read_header_buf->len > 0)
+				break;
 			soup_message_set_status (msg, SOUP_STATUS_MALFORMED);
 			g_set_error_literal (error, G_IO_ERROR,
 					     G_IO_ERROR_PARTIAL_INPUT,
@@ -241,27 +244,28 @@ read_headers (SoupMessage *msg, gboolean blocking,
 			if (nread == 1 && old_len >= 2 &&
 			    !strncmp ((char *)io->read_header_buf->data +
 				      io->read_header_buf->len - 2,
-				      "\n\n", 2))
+				      "\n\n", 2)) {
+				io->read_header_buf->len--;
 				break;
-			else if (nread == 2 && old_len >= 3 &&
+			} else if (nread == 2 && old_len >= 3 &&
 				 !strncmp ((char *)io->read_header_buf->data +
 					   io->read_header_buf->len - 3,
-					   "\n\r\n", 3))
+					   "\n\r\n", 3)) {
+				io->read_header_buf->len -= 2;
 				break;
+			}
+		}
+
+		if (io->read_header_buf->len > HEADER_SIZE_LIMIT) {
+			soup_message_set_status (msg, SOUP_STATUS_MALFORMED);
+			g_set_error_literal (error, G_IO_ERROR,
+					     G_IO_ERROR_PARTIAL_INPUT,
+					     _("Header too big"));
+			return FALSE;
 		}
 	}
 
-	/* We need to "rewind" io->read_header_buf back one line.
-	 * That SHOULD be two characters (CR LF), but if the
-	 * web server was stupid, it might only be one.
-	 */
-	if (io->read_header_buf->len < 3 ||
-	    io->read_header_buf->data[io->read_header_buf->len - 2] == '\n')
-		io->read_header_buf->len--;
-	else
-		io->read_header_buf->len -= 2;
 	io->read_header_buf->data[io->read_header_buf->len] = '\0';
-
 	return TRUE;
 }
 
@@ -817,7 +821,7 @@ message_source_check (GSource *source)
 		SoupMessagePrivate *priv = SOUP_MESSAGE_GET_PRIVATE (message_source->msg);
 		SoupMessageIOData *io = priv->io_data;
 
-		if (!io || io->paused)
+		if (io && io->paused)
 			return FALSE;
 		else
 			return TRUE;
@@ -1317,7 +1321,7 @@ soup_message_io_unpause (SoupMessage *msg)
 
 	if (!io->unpause_source) {
 		io->unpause_source = soup_add_completion_reffed (io->async_context,
-								 io_unpause_internal, msg);
+								 io_unpause_internal, msg, NULL);
 	}
 }
 

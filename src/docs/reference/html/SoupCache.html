@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>SoupCache: libsoup Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch02.html" title="Core API">
 <link rel="prev" href="SoupAuthDomainDigest.html" title="SoupAuthDomainDigest">
 <link rel="next" href="SoupCookie.html" title="SoupCookie">
-<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.28.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -36,7 +36,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="SoupCache.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -84,7 +84,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
+<span class="returnvalue">guint</span>
 </td>
 <td class="function_name">
 <a class="link" href="SoupCache.html#soup-cache-get-max-size" title="soup_cache_get_max_size ()">soup_cache_get_max_size</a> <span class="c_punctuation">()</span>
@@ -103,7 +103,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupCache.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -112,7 +112,7 @@
 <tbody>
 <tr>
 <td class="property_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
+<span class="type">gchar</span> *</td>
 <td class="property_name"><a class="link" href="SoupCache.html#SoupCache--cache-dir" title="The “cache-dir” property">cache-dir</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
@@ -126,7 +126,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupCache.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -145,7 +145,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupCache.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> SoupCache
 </pre>
 </div>
@@ -173,8 +173,8 @@ soup_cache_new (<em class="parameter"><code>const <span class="type">char</span>
                 <em class="parameter"><code><a class="link" href="SoupCache.html#SoupCacheType" title="enum SoupCacheType"><span class="type">SoupCacheType</span></a> cache_type</code></em>);</pre>
 <p>Creates a new <a class="link" href="SoupCache.html" title="SoupCache"><span class="type">SoupCache</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.3.6.10.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-cache-new.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -183,8 +183,11 @@ soup_cache_new (<em class="parameter"><code>const <span class="type">char</span>
 <tbody>
 <tr>
 <td class="parameter_name"><p>cache_dir</p></td>
-<td class="parameter_description"><p>the directory to store the cached data, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default one</p></td>
-<td class="parameter_annotations"> </td>
+<td class="parameter_description"><p>the directory to store the cached data, or <code class="literal">NULL</code>
+to use the default one. Note that since the cache isn't safe to access for
+multiple processes at once, and the default directory isn't namespaced by
+process, clients are strongly discouraged from passing <code class="literal">NULL</code>. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>cache_type</p></td>
@@ -195,7 +198,7 @@ soup_cache_new (<em class="parameter"><code>const <span class="type">char</span>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.10.2.6"></a><h4>Returns</h4>
+<a name="soup-cache-new.returns"></a><h4>Returns</h4>
 <p> a new <a class="link" href="SoupCache.html" title="SoupCache"><span class="type">SoupCache</span></a></p>
 </div>
 <p class="since">Since: 2.34</p>
@@ -207,14 +210,14 @@ soup_cache_new (<em class="parameter"><code>const <span class="type">char</span>
 soup_cache_flush (<em class="parameter"><code><a class="link" href="SoupCache.html" title="SoupCache"><span class="type">SoupCache</span></a> *cache</code></em>);</pre>
 <p>This function will force all pending writes in the <em class="parameter"><code>cache</code></em>
  to be
-committed to disk. For doing so it will iterate the <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a>
+committed to disk. For doing so it will iterate the <span class="type">GMainContext</span>
 associated with <em class="parameter"><code>cache</code></em>
 's session as long as needed.</p>
 <p>Contrast with <a class="link" href="SoupCache.html#soup-cache-dump" title="soup_cache_dump ()"><code class="function">soup_cache_dump()</code></a>, which writes out the cache index
 file.</p>
 <div class="refsect3">
-<a name="id-1.3.6.10.3.6"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-cache-flush.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -237,8 +240,8 @@ soup_cache_clear (<em class="parameter"><code><a class="link" href="SoupCache.ht
 <p>Will remove all entries in the <em class="parameter"><code>cache</code></em>
  plus all the cache files.</p>
 <div class="refsect3">
-<a name="id-1.3.6.10.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-cache-clear.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -264,8 +267,8 @@ soup_cache_dump (<em class="parameter"><code><a class="link" href="SoupCache.htm
 <p>You must call this before exiting if you want your cache data to
 persist between sessions.</p>
 <div class="refsect3">
-<a name="id-1.3.6.10.5.6"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-cache-dump.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -288,8 +291,8 @@ soup_cache_load (<em class="parameter"><code><a class="link" href="SoupCache.htm
 <p>Loads the contents of <em class="parameter"><code>cache</code></em>
 's index into memory.</p>
 <div class="refsect3">
-<a name="id-1.3.6.10.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-cache-load.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -307,12 +310,12 @@ soup_cache_load (<em class="parameter"><code><a class="link" href="SoupCache.htm
 <hr>
 <div class="refsect2">
 <a name="soup-cache-get-max-size"></a><h3>soup_cache_get_max_size ()</h3>
-<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
+<pre class="programlisting"><span class="returnvalue">guint</span>
 soup_cache_get_max_size (<em class="parameter"><code><a class="link" href="SoupCache.html" title="SoupCache"><span class="type">SoupCache</span></a> *cache</code></em>);</pre>
 <p>Gets the maximum size of the cache.</p>
 <div class="refsect3">
-<a name="id-1.3.6.10.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-cache-get-max-size.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -326,7 +329,7 @@ soup_cache_get_max_size (<em class="parameter"><code><a class="link" href="SoupC
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.10.7.6"></a><h4>Returns</h4>
+<a name="soup-cache-get-max-size.returns"></a><h4>Returns</h4>
 <p> the maximum size of the cache, in bytes.</p>
 </div>
 <p class="since">Since: 2.34</p>
@@ -336,11 +339,11 @@ soup_cache_get_max_size (<em class="parameter"><code><a class="link" href="SoupC
 <a name="soup-cache-set-max-size"></a><h3>soup_cache_set_max_size ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_cache_set_max_size (<em class="parameter"><code><a class="link" href="SoupCache.html" title="SoupCache"><span class="type">SoupCache</span></a> *cache</code></em>,
-                         <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#guint"><span class="type">guint</span></a> max_size</code></em>);</pre>
+                         <em class="parameter"><code><span class="type">guint</span> max_size</code></em>);</pre>
 <p>Sets the maximum size of the cache.</p>
 <div class="refsect3">
-<a name="id-1.3.6.10.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-cache-set-max-size.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -375,8 +378,8 @@ soup_cache_set_max_size (<em class="parameter"><code><a class="link" href="SoupC
 <p>The type of cache; this affects what kinds of responses will be
 saved.</p>
 <div class="refsect3">
-<a name="id-1.3.6.11.3.4"></a><h4>Members</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="SoupCacheType.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
 <col class="enum_members_description">
@@ -407,7 +410,7 @@ saved.</p>
 <a name="SoupCache.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="SoupCache--cache-dir"></a><h3>The <code class="literal">“cache-dir”</code> property</h3>
-<pre class="programlisting">  “cache-dir”                <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
+<pre class="programlisting">  “cache-dir”                <span class="type">gchar</span> *</pre>
 <p>The directory to store the cache files.</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
@@ -423,6 +426,6 @@ saved.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.24</div>
+<hr>Generated by GTK-Doc V1.28.1</div>
 </body>
 </html>

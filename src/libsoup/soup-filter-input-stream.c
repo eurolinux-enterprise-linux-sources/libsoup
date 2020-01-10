@@ -29,15 +29,14 @@ struct _SoupFilterInputStreamPrivate {
 static void soup_filter_input_stream_pollable_init (GPollableInputStreamInterface *pollable_interface, gpointer interface_data);
 
 G_DEFINE_TYPE_WITH_CODE (SoupFilterInputStream, soup_filter_input_stream, G_TYPE_FILTER_INPUT_STREAM,
+                         G_ADD_PRIVATE (SoupFilterInputStream)
 			 G_IMPLEMENT_INTERFACE (G_TYPE_POLLABLE_INPUT_STREAM,
 						soup_filter_input_stream_pollable_init))
 
 static void
 soup_filter_input_stream_init (SoupFilterInputStream *stream)
 {
-	stream->priv = G_TYPE_INSTANCE_GET_PRIVATE (stream,
-						    SOUP_TYPE_FILTER_INPUT_STREAM,
-						    SoupFilterInputStreamPrivate);
+	stream->priv = soup_filter_input_stream_get_instance_private (stream);
 }
 
 static void
@@ -149,8 +148,6 @@ soup_filter_input_stream_class_init (SoupFilterInputStreamClass *stream_class)
 	GObjectClass *object_class = G_OBJECT_CLASS (stream_class);
 	GInputStreamClass *input_stream_class = G_INPUT_STREAM_CLASS (stream_class);
 
-	g_type_class_add_private (stream_class, sizeof (SoupFilterInputStreamPrivate));
-
 	object_class->finalize = soup_filter_input_stream_finalize;
 
 	input_stream_class->read_fn = soup_filter_input_stream_read_fn;
@@ -201,7 +198,7 @@ soup_filter_input_stream_read_until (SoupFilterInputStream  *fstream,
 				     GCancellable           *cancellable,
 				     GError                **error)
 {
-	gssize nread;
+	gssize nread, read_length;
 	guint8 *p, *buf, *end;
 	gboolean eof = FALSE;
 	GError *my_error = NULL;
@@ -254,10 +251,11 @@ soup_filter_input_stream_read_until (SoupFilterInputStream  *fstream,
 	} else
 		buf = fstream->priv->buf->data;
 
-	/* Scan for the boundary */
-	end = buf + fstream->priv->buf->len;
-	if (!eof)
-		end -= boundary_length;
+	/* Scan for the boundary within the range we can possibly return. */
+	if (include_boundary)
+		end = buf + MIN (fstream->priv->buf->len, length) - boundary_length;
+	else
+		end = buf + MIN (fstream->priv->buf->len - boundary_length, length);
 	for (p = buf; p <= end; p++) {
 		if (*p == *(guint8*)boundary &&
 		    !memcmp (p, boundary, boundary_length)) {
@@ -271,10 +269,9 @@ soup_filter_input_stream_read_until (SoupFilterInputStream  *fstream,
 	if (!*got_boundary && fstream->priv->buf->len < length && !eof)
 		goto fill_buffer;
 
-	/* Return everything up to 'p' (which is either just after the boundary if
-	 * include_boundary is TRUE, just before the boundary if include_boundary is
-	 * FALSE, @boundary_len - 1 bytes before the end of the buffer, or end-of-
-	 * file).
-	 */
-	return read_from_buf (fstream, buffer, p - buf);
+	if (eof && !*got_boundary)
+		read_length = MIN (fstream->priv->buf->len, length);
+	else
+		read_length = p - buf;
+	return read_from_buf (fstream, buffer, read_length);
 }

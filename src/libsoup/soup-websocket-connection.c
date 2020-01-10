@@ -66,6 +66,7 @@
  * @error: default handler for the #SoupWebsocketConnection::error signal
  * @closing: the default handler for the #SoupWebsocketConnection:closing signal
  * @closed: default handler for the #SoupWebsocketConnection::closed signal
+ * @pong: default handler for the #SoupWebsocketConnection::pong signal
  *
  * The abstract base class for #SoupWebsocketConnection
  *
@@ -81,6 +82,7 @@ enum {
 	PROP_PROTOCOL,
 	PROP_STATE,
 	PROP_MAX_INCOMING_PAYLOAD_SIZE,
+	PROP_KEEPALIVE_INTERVAL,
 };
 
 enum {
@@ -88,16 +90,24 @@ enum {
 	ERROR,
 	CLOSING,
 	CLOSED,
+	PONG,
 	NUM_SIGNALS
 };
 
 static guint signals[NUM_SIGNALS] = { 0, };
 
+typedef enum {
+	SOUP_WEBSOCKET_QUEUE_NORMAL = 0,
+	SOUP_WEBSOCKET_QUEUE_URGENT = 1 << 0,
+	SOUP_WEBSOCKET_QUEUE_LAST = 1 << 1,
+} SoupWebsocketQueueFlags;
+
 typedef struct {
 	GBytes *data;
-	gboolean last;
 	gsize sent;
 	gsize amount;
+	SoupWebsocketQueueFlags flags;
+	gboolean pending;
 } Frame;
 
 struct _SoupWebsocketConnectionPrivate {
@@ -107,6 +117,7 @@ struct _SoupWebsocketConnectionPrivate {
 	char *origin;
 	char *protocol;
 	guint64 max_incoming_payload_size;
+	guint keepalive_interval;
 
 	gushort peer_close_code;
 	char *peer_close_data;
@@ -131,20 +142,18 @@ struct _SoupWebsocketConnectionPrivate {
 	/* Current message being assembled */
 	guint8 message_opcode;
 	GByteArray *message_data;
+
+	GSource *keepalive_timeout;
 };
 
 #define MAX_INCOMING_PAYLOAD_SIZE_DEFAULT   128 * 1024
 
-G_DEFINE_TYPE (SoupWebsocketConnection, soup_websocket_connection, G_TYPE_OBJECT)
-
-typedef enum {
-	SOUP_WEBSOCKET_QUEUE_NORMAL = 0,
-	SOUP_WEBSOCKET_QUEUE_URGENT = 1 << 0,
-	SOUP_WEBSOCKET_QUEUE_LAST = 1 << 1,
-} SoupWebsocketQueueFlags;
+G_DEFINE_TYPE_WITH_PRIVATE (SoupWebsocketConnection, soup_websocket_connection, G_TYPE_OBJECT)
 
 static void queue_frame (SoupWebsocketConnection *self, SoupWebsocketQueueFlags flags,
 			 gpointer data, gsize len, gsize amount);
+
+static void protocol_error_and_close (SoupWebsocketConnection *self);
 
 static void
 frame_free (gpointer data)
@@ -162,8 +171,7 @@ soup_websocket_connection_init (SoupWebsocketConnection *self)
 {
 	SoupWebsocketConnectionPrivate *pv;
 
-	pv = self->pv = G_TYPE_INSTANCE_GET_PRIVATE (self, SOUP_TYPE_WEBSOCKET_CONNECTION,
-						     SoupWebsocketConnectionPrivate);
+	pv = self->pv = soup_websocket_connection_get_instance_private (self);
 
 	pv->incoming = g_byte_array_sized_new (1024);
 	g_queue_init (&pv->outgoing);
@@ -225,6 +233,18 @@ stop_output (SoupWebsocketConnection *self)
 }
 
 static void
+keepalive_stop_timeout (SoupWebsocketConnection *self)
+{
+	SoupWebsocketConnectionPrivate *pv = self->pv;
+
+	if (pv->keepalive_timeout) {
+		g_source_destroy (pv->keepalive_timeout);
+		g_source_unref (pv->keepalive_timeout);
+		pv->keepalive_timeout = NULL;
+	}
+}
+
+static void
 close_io_stop_timeout (SoupWebsocketConnection *self)
 {
 	SoupWebsocketConnectionPrivate *pv = self->pv;
@@ -241,6 +261,7 @@ close_io_stream (SoupWebsocketConnection *self)
 {
 	SoupWebsocketConnectionPrivate *pv = self->pv;
 
+	keepalive_stop_timeout (self);
 	close_io_stop_timeout (self);
 
 	if (!pv->io_closing) {
@@ -331,15 +352,21 @@ send_message (SoupWebsocketConnection *self,
 	guint8 *mask = 0;
 	guint8 *at;
 
+	if (!(soup_websocket_connection_get_state (self) == SOUP_WEBSOCKET_STATE_OPEN)) {
+		g_debug ("Ignoring message since the connection is closed or is closing");
+		return;
+	}
+
 	bytes = g_byte_array_sized_new (14 + length);
 	outer = bytes->data;
 	outer[0] = 0x80 | opcode;
 
-	/* If control message, truncate payload */
+	/* If control message, check payload size */
 	if (opcode & 0x08) {
 		if (length > 125) {
-			g_warning ("Truncating WebSocket control message payload");
-			length = 125;
+			g_warning ("WebSocket control message payload exceeds size limit");
+			protocol_error_and_close (self);
+			return;
 		}
 
 		buffered_amount = 0;
@@ -374,9 +401,10 @@ send_message (SoupWebsocketConnection *self,
 	 * probably a client somewhere that's not expecting it.
 	 */
 	if (self->pv->connection_type == SOUP_WEBSOCKET_CONNECTION_CLIENT) {
+		guint32 rnd = g_random_int ();
 		outer[1] |= 0x80;
 		mask = outer + bytes->len;
-		* ((guint32 *)mask) = g_random_int ();
+		memcpy (mask, &rnd, sizeof (rnd));
 		bytes->len += 4;
 	}
 
@@ -411,6 +439,8 @@ send_close (SoupWebsocketConnection *self,
 
 	send_message (self, flags, 0x08, (guint8 *)buffer, len);
 	self->pv->close_sent = TRUE;
+
+	keepalive_stop_timeout (self);
 }
 
 static void
@@ -512,6 +542,63 @@ too_big_error_and_close (SoupWebsocketConnection *self,
 }
 
 static void
+close_connection (SoupWebsocketConnection *self,
+                  gushort                  code,
+                  const char              *data)
+{
+	SoupWebsocketQueueFlags flags;
+	SoupWebsocketConnectionPrivate *pv;
+
+	pv = self->pv;
+
+	if (pv->close_sent) {
+		g_debug ("close code already sent");
+		return;
+	}
+
+	/* Validate the closing code received by the peer */
+	switch (code) {
+	case SOUP_WEBSOCKET_CLOSE_NORMAL:
+	case SOUP_WEBSOCKET_CLOSE_GOING_AWAY:
+	case SOUP_WEBSOCKET_CLOSE_PROTOCOL_ERROR:
+	case SOUP_WEBSOCKET_CLOSE_UNSUPPORTED_DATA:
+	case SOUP_WEBSOCKET_CLOSE_BAD_DATA:
+	case SOUP_WEBSOCKET_CLOSE_POLICY_VIOLATION:
+	case SOUP_WEBSOCKET_CLOSE_TOO_BIG:
+		break;
+	case SOUP_WEBSOCKET_CLOSE_NO_EXTENSION:
+		if (pv->connection_type == SOUP_WEBSOCKET_CONNECTION_SERVER) {
+			g_debug ("Wrong closing code %d received for a server connection",
+			         code);
+		}
+		break;
+	case SOUP_WEBSOCKET_CLOSE_SERVER_ERROR:
+		if (pv->connection_type != SOUP_WEBSOCKET_CONNECTION_SERVER) {
+			g_debug ("Wrong closing code %d received for a non server connection",
+			         code);
+		}
+		break;
+	default:
+		if (code < 3000) {
+			g_debug ("Wrong closing code %d received", code);
+			protocol_error_and_close (self);
+			return;
+		}
+	}
+
+	g_signal_emit (self, signals[CLOSING], 0);
+
+	if (pv->close_received)
+		g_debug ("responding to close request");
+
+	flags = 0;
+	if (pv->connection_type == SOUP_WEBSOCKET_CONNECTION_SERVER && pv->close_received)
+		flags |= SOUP_WEBSOCKET_QUEUE_LAST;
+	send_close (self, flags, code, data);
+	close_io_after_timeout (self);
+}
+
+static void
 receive_close (SoupWebsocketConnection *self,
 	       const guint8 *data,
 	       gsize len)
@@ -523,17 +610,32 @@ receive_close (SoupWebsocketConnection *self,
 	pv->peer_close_data = NULL;
 	pv->close_received = TRUE;
 
-	/* Store the code/data payload */
-	if (len >= 2) {
+	switch (len) {
+	case 0:
+		/* Send a clean close when having an empty payload */
+		close_connection (self, 1000, NULL);
+		return;
+	case 1:
+		/* Send a protocol error since the close code is incomplete */
+		protocol_error_and_close (self);
+		return;
+	default:
+		/* Store the code/data payload */
 		pv->peer_close_code = (guint16)data[0] << 8 | data[1];
+		break;
 	}
+
 	if (len > 2) {
 		data += 2;
 		len -= 2;
-		if (g_utf8_validate ((char *)data, len, NULL))
-			pv->peer_close_data = g_strndup ((char *)data, len);
-		else
+		
+		if (!g_utf8_validate ((char *)data, len, NULL)) {
 			g_debug ("received non-UTF8 close data: %d '%.*s' %d", (int)len, (int)len, (char *)data, (int)data[0]);
+			protocol_error_and_close (self);
+			return;
+		}
+
+		pv->peer_close_data = g_strndup ((char *)data, len);
 	}
 
 	/* Once we receive close response on server, close immediately */
@@ -542,8 +644,7 @@ receive_close (SoupWebsocketConnection *self,
 		if (pv->connection_type == SOUP_WEBSOCKET_CONNECTION_SERVER)
 			close_io_stream (self);
 	} else {
-		/* Send back the response */
-		soup_websocket_connection_close (self, pv->peer_close_code, NULL);
+		close_connection (self, pv->peer_close_code, pv->peer_close_data);
 	}
 }
 
@@ -555,6 +656,27 @@ receive_ping (SoupWebsocketConnection *self,
 	/* Send back a pong with same data */
 	g_debug ("received ping, responding");
 	send_message (self, SOUP_WEBSOCKET_QUEUE_URGENT, 0x0A, data, len);
+}
+
+static void
+receive_pong (SoupWebsocketConnection *self,
+                      const guint8 *data,
+                      gsize len)
+{
+	GByteArray *bytes;
+
+	g_debug ("received pong message");
+
+	bytes = g_byte_array_sized_new (len + 1);
+	g_byte_array_append (bytes, data, len);
+	/* Always null terminate, as a convenience */
+	g_byte_array_append (bytes, (guchar *)"\0", 1);
+	/* But don't include the null terminator in the byte count */
+	bytes->len--;
+
+	g_signal_emit (self, signals[PONG], 0, bytes);
+	g_byte_array_unref (bytes);
+
 }
 
 static void
@@ -586,10 +708,12 @@ process_contents (SoupWebsocketConnection *self,
 			receive_ping (self, payload, payload_len);
 			break;
 		case 0x0A:
+			receive_pong (self, payload, payload_len);
 			break;
 		default:
 			g_debug ("received unsupported control frame: %d", (int)opcode);
-			break;
+			protocol_error_and_close (self);
+			return;
 		}
 	} else if (pv->close_received) {
 		g_debug ("received message after close was received");
@@ -599,11 +723,11 @@ process_contents (SoupWebsocketConnection *self,
 		if (!fin && opcode) {
 			/* Initial fragment of a message */
 			if (pv->message_data) {
-				g_debug ("received out of order inital message fragment");
+				g_debug ("received out of order initial message fragment");
 				protocol_error_and_close (self);
 				return;
 			}
-			g_debug ("received inital fragment frame %d with %d payload", (int)opcode, (int)payload_len);
+			g_debug ("received initial fragment frame %d with %d payload", (int)opcode, (int)payload_len);
 		} else if (!fin && !opcode) {
 			/* Middle fragment of a message */
 			if (!pv->message_data) {
@@ -638,7 +762,22 @@ process_contents (SoupWebsocketConnection *self,
 
 		switch (pv->message_opcode) {
 		case 0x01:
-			if (!g_utf8_validate ((char *)payload, payload_len, NULL)) {
+		case 0x02:
+			g_byte_array_append (pv->message_data, payload, payload_len);
+			break;
+		default:
+			g_debug ("received unknown data frame: %d", (int)opcode);
+			protocol_error_and_close (self);
+			return;
+		}
+
+		/* Actually deliver the message? */
+		if (fin) {
+			if (pv->message_opcode == 0x01 &&
+			    !g_utf8_validate((char *)pv->message_data->data,
+			                     pv->message_data->len,
+			                     NULL)) {
+
 				g_debug ("received invalid non-UTF8 text data");
 
 				/* Discard the entire message */
@@ -649,17 +788,7 @@ process_contents (SoupWebsocketConnection *self,
 				bad_data_error_and_close (self);
 				return;
 			}
-			/* fall through */
-		case 0x02:
-			g_byte_array_append (pv->message_data, payload, payload_len);
-			break;
-		default:
-			g_debug ("received unknown data frame: %d", (int)opcode);
-			break;
-		}
 
-		/* Actually deliver the message? */
-		if (fin) {
 			/* Always null terminate, as a convenience */
 			g_byte_array_append (pv->message_data, (guchar *)"\0", 1);
 
@@ -701,6 +830,11 @@ process_frame (SoupWebsocketConnection *self)
 	control = header[0] & 0x08;
 	opcode = header[0] & 0x0f;
 	masked = ((header[1] & 0x80) != 0);
+
+	/* We do not support extensions, reserved bits must be 0 */
+	if (header[0] & 0x70) {
+		protocol_error_and_close (self);
+	}
 
 	switch (header[1] & 0x7f) {
 	case 126:
@@ -831,6 +965,12 @@ on_web_socket_output (GObject *pollable_stream,
 	gssize count;
 	gsize len;
 
+	if (soup_websocket_connection_get_state (self) == SOUP_WEBSOCKET_STATE_CLOSED) {
+		g_debug ("Ignoring message since the connection is closed");
+		stop_output (self);
+		return TRUE;
+	}
+
 	frame = g_queue_peek_head (&pv->outgoing);
 
 	/* No more frames to send */
@@ -852,6 +992,9 @@ on_web_socket_output (GObject *pollable_stream,
 		if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_WOULD_BLOCK)) {
 			g_clear_error (&error);
 			count = 0;
+
+			g_debug ("failed to send frame because it would block, marking as pending");
+			frame->pending = TRUE;
 		} else {
 			emit_error_and_close (self, error, TRUE);
 			return FALSE;
@@ -863,7 +1006,7 @@ on_web_socket_output (GObject *pollable_stream,
 		g_debug ("sent frame");
 		g_queue_pop_head (&pv->outgoing);
 
-		if (frame->last) {
+		if (frame->flags & SOUP_WEBSOCKET_QUEUE_LAST) {
 			if (pv->connection_type == SOUP_WEBSOCKET_CONNECTION_SERVER) {
 				close_io_stream (self);
 			} else {
@@ -900,7 +1043,6 @@ queue_frame (SoupWebsocketConnection *self,
 {
 	SoupWebsocketConnectionPrivate *pv = self->pv;
 	Frame *frame;
-	Frame *prev;
 
 	g_return_if_fail (SOUP_IS_WEBSOCKET_CONNECTION (self));
 	g_return_if_fail (pv->close_sent == FALSE);
@@ -910,21 +1052,22 @@ queue_frame (SoupWebsocketConnection *self,
 	frame = g_slice_new0 (Frame);
 	frame->data = g_bytes_new_take (data, len);
 	frame->amount = amount;
-	frame->last = (flags & SOUP_WEBSOCKET_QUEUE_LAST) ? TRUE : FALSE;
+	frame->flags = flags;
 
 	/* If urgent put at front of queue */
 	if (flags & SOUP_WEBSOCKET_QUEUE_URGENT) {
-		/* But we can't interrupt a message already partially sent */
-		prev = g_queue_pop_head (&pv->outgoing);
-		if (prev == NULL) {
-			g_queue_push_head (&pv->outgoing, frame);
-		} else if (prev->sent > 0) {
-			g_queue_push_head (&pv->outgoing, frame);
-			g_queue_push_head (&pv->outgoing, prev);
-		} else {
-			g_queue_push_head (&pv->outgoing, prev);
-			g_queue_push_head (&pv->outgoing, frame);
+		GList *l;
+
+		/* Find out the first frame that is not urgent or partially sent or pending */
+		for (l = g_queue_peek_head_link (&pv->outgoing); l != NULL; l = l->next) {
+			Frame *prev = l->data;
+
+			if (!(prev->flags & SOUP_WEBSOCKET_QUEUE_URGENT) &&
+			    prev->sent == 0 && !prev->pending)
+				break;
 		}
+
+		g_queue_insert_before (&pv->outgoing, l, frame);
 	} else {
 		g_queue_push_tail (&pv->outgoing, frame);
 	}
@@ -997,6 +1140,10 @@ soup_websocket_connection_get_property (GObject *object,
 		g_value_set_uint64 (value, pv->max_incoming_payload_size);
 		break;
 
+	case PROP_KEEPALIVE_INTERVAL:
+		g_value_set_uint (value, pv->keepalive_interval);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -1041,6 +1188,11 @@ soup_websocket_connection_set_property (GObject *object,
 		pv->max_incoming_payload_size = g_value_get_uint64 (value);
 		break;
 
+	case PROP_KEEPALIVE_INTERVAL:
+		soup_websocket_connection_set_keepalive_interval (self,
+		                                                  g_value_get_uint (value));
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -1079,6 +1231,7 @@ soup_websocket_connection_finalize (GObject *object)
 	g_assert (pv->io_closing);
 	g_assert (pv->io_closed);
 	g_assert (!pv->close_timeout);
+	g_assert (!pv->keepalive_timeout);
 
 	if (pv->message_data)
 		g_byte_array_free (pv->message_data, TRUE);
@@ -1095,8 +1248,6 @@ static void
 soup_websocket_connection_class_init (SoupWebsocketConnectionClass *klass)
 {
 	GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
-
-	g_type_class_add_private (klass, sizeof (SoupWebsocketConnectionPrivate));
 
 	gobject_class->constructed = soup_websocket_connection_constructed;
 	gobject_class->get_property = soup_websocket_connection_get_property;
@@ -1228,6 +1379,26 @@ soup_websocket_connection_class_init (SoupWebsocketConnectionClass *klass)
 							      G_PARAM_STATIC_STRINGS));
 
 	/**
+	 * SoupWebsocketConnection:keepalive-interval:
+	 *
+	 * Interval in seconds on when to send a ping message which will
+	 * serve as a keepalive message. If set to 0 the keepalive message is
+	 * disabled.
+	 *
+	 * Since: 2.58
+	 */
+	g_object_class_install_property (gobject_class, PROP_KEEPALIVE_INTERVAL,
+					 g_param_spec_uint ("keepalive-interval",
+					                    "Keepalive interval",
+					                    "Keepalive interval",
+					                    0,
+					                    G_MAXUINT,
+					                    0,
+					                    G_PARAM_READWRITE |
+					                    G_PARAM_CONSTRUCT |
+					                    G_PARAM_STATIC_STRINGS));
+
+	/**
 	 * SoupWebsocketConnection::message:
 	 * @self: the WebSocket
 	 * @type: the type of message contents
@@ -1300,6 +1471,27 @@ soup_websocket_connection_class_init (SoupWebsocketConnectionClass *klass)
 					G_STRUCT_OFFSET (SoupWebsocketConnectionClass, closed),
 					NULL, NULL, g_cclosure_marshal_generic,
 					G_TYPE_NONE, 0);
+
+	/**
+	 * SoupWebsocketConnection::pong:
+	 * @self: the WebSocket
+	 * @message: the application data (if any)
+	 *
+	 * Emitted when we receive a Pong frame (solicited or
+	 * unsolicited) from the peer.
+	 *
+	 * As a convenience, the @message data will always be
+	 * NUL-terminated, but the NUL byte will not be included in
+	 * the length count.
+	 *
+	 * Since: 2.60
+	 */
+	signals[PONG] = g_signal_new ("pong",
+				      SOUP_TYPE_WEBSOCKET_CONNECTION,
+				      G_SIGNAL_RUN_FIRST,
+				      G_STRUCT_OFFSET (SoupWebsocketConnectionClass, pong),
+				      NULL, NULL, g_cclosure_marshal_generic,
+				      G_TYPE_NONE, 1, G_TYPE_BYTES);
 }
 
 /**
@@ -1574,7 +1766,6 @@ soup_websocket_connection_close (SoupWebsocketConnection *self,
 				 gushort code,
 				 const char *data)
 {
-	SoupWebsocketQueueFlags flags;
 	SoupWebsocketConnectionPrivate *pv;
 
 	g_return_if_fail (SOUP_IS_WEBSOCKET_CONNECTION (self));
@@ -1589,16 +1780,7 @@ soup_websocket_connection_close (SoupWebsocketConnection *self,
 	else
 		g_return_if_fail (code != SOUP_WEBSOCKET_CLOSE_SERVER_ERROR);
 
-	g_signal_emit (self, signals[CLOSING], 0);
-
-	if (pv->close_received)
-		g_debug ("responding to close request");
-
-	flags = 0;
-	if (pv->connection_type == SOUP_WEBSOCKET_CONNECTION_SERVER && pv->close_received)
-		flags |= SOUP_WEBSOCKET_QUEUE_LAST;
-	send_close (self, flags, code, data);
-	close_io_after_timeout (self);
+	close_connection (self, code, data);
 }
 
 /**
@@ -1644,5 +1826,73 @@ soup_websocket_connection_set_max_incoming_payload_size (SoupWebsocketConnection
 	if (pv->max_incoming_payload_size != max_incoming_payload_size) {
 		pv->max_incoming_payload_size = max_incoming_payload_size;
 		g_object_notify (G_OBJECT (self), "max-incoming-payload-size");
+	}
+}
+
+/**
+ * soup_websocket_connection_get_keepalive_interval:
+ * @self: the WebSocket
+ *
+ * Gets the keepalive interval in seconds or 0 if disabled.
+ *
+ * Returns: the keepalive interval.
+ *
+ * Since: 2.58
+ */
+guint
+soup_websocket_connection_get_keepalive_interval (SoupWebsocketConnection *self)
+{
+	SoupWebsocketConnectionPrivate *pv;
+
+	g_return_val_if_fail (SOUP_IS_WEBSOCKET_CONNECTION (self), 0);
+	pv = self->pv;
+
+	return pv->keepalive_interval;
+}
+
+static gboolean
+on_queue_ping (gpointer user_data)
+{
+	SoupWebsocketConnection *self = SOUP_WEBSOCKET_CONNECTION (user_data);
+	static const char ping_payload[] = "libsoup";
+
+	g_debug ("sending ping message");
+
+	send_message (self, SOUP_WEBSOCKET_QUEUE_NORMAL, 0x09,
+		      (guint8 *) ping_payload, strlen(ping_payload));
+
+	return G_SOURCE_CONTINUE;
+}
+
+/**
+ * soup_websocket_connection_set_keepalive_interval:
+ * @self: the WebSocket
+ * @interval: the interval to send a ping message or 0 to disable it
+ *
+ * Sets the interval in seconds on when to send a ping message which will serve
+ * as a keepalive message. If set to 0 the keepalive message is disabled.
+ *
+ * Since: 2.58
+ */
+void
+soup_websocket_connection_set_keepalive_interval (SoupWebsocketConnection *self,
+                                                  guint                    interval)
+{
+	SoupWebsocketConnectionPrivate *pv;
+
+	g_return_if_fail (SOUP_IS_WEBSOCKET_CONNECTION (self));
+	pv = self->pv;
+
+	if (pv->keepalive_interval != interval) {
+		pv->keepalive_interval = interval;
+		g_object_notify (G_OBJECT (self), "keepalive-interval");
+
+		keepalive_stop_timeout (self);
+
+		if (interval > 0) {
+			pv->keepalive_timeout = g_timeout_source_new_seconds (interval);
+			g_source_set_callback (pv->keepalive_timeout, on_queue_ping, self, NULL);
+			g_source_attach (pv->keepalive_timeout, pv->main_context);
+		}
 	}
 }

@@ -127,9 +127,8 @@ enum {
 	PROP_CACHE_TYPE
 };
 
-#define SOUP_CACHE_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SOUP_TYPE_CACHE, SoupCachePrivate))
-
 G_DEFINE_TYPE_WITH_CODE (SoupCache, soup_cache, G_TYPE_OBJECT,
+                         G_ADD_PRIVATE (SoupCache)
 			 G_IMPLEMENT_INTERFACE (SOUP_TYPE_SESSION_FEATURE,
 						soup_cache_session_feature_init)
 			 G_IMPLEMENT_INTERFACE (SOUP_TYPE_CONTENT_PROCESSOR,
@@ -174,7 +173,7 @@ get_cacheability (SoupCache *cache, SoupMessage *msg)
 	cache_control = soup_message_headers_get_list (msg->response_headers, "Cache-Control");
 	if (cache_control && *cache_control) {
 		GHashTable *hash;
-		SoupCachePrivate *priv = SOUP_CACHE_GET_PRIVATE (cache);
+		SoupCachePrivate *priv = soup_cache_get_instance_private (cache);
 
 		hash = soup_header_parse_param_list (cache_control);
 
@@ -348,7 +347,7 @@ soup_cache_entry_set_freshness (SoupCacheEntry *entry, SoupMessage *msg, SoupCac
 		const char *max_age, *s_maxage;
 		gint64 freshness_lifetime = 0;
 		GHashTable *hash;
-		SoupCachePrivate *priv = SOUP_CACHE_GET_PRIVATE (cache);
+		SoupCachePrivate *priv = soup_cache_get_instance_private (cache);
 
 		hash = soup_header_parse_param_list (cache_control);
 
@@ -856,7 +855,7 @@ soup_cache_content_processor_wrap_input (SoupContentProcessor *processor,
 		soup_cache_entry_remove (cache, entry, TRUE);
 
 	request_time = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (msg), "request-time"));
-	response_time = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (msg), "request-time"));
+	response_time = GPOINTER_TO_INT (g_object_get_data (G_OBJECT (msg), "response-time"));
 	entry = soup_cache_entry_new (cache, msg, request_time, response_time);
 	entry->hits = 1;
 	entry->dirty = TRUE;
@@ -899,7 +898,7 @@ soup_cache_init (SoupCache *cache)
 {
 	SoupCachePrivate *priv;
 
-	priv = cache->priv = SOUP_CACHE_GET_PRIVATE (cache);
+	priv = cache->priv = soup_cache_get_instance_private (cache);
 
 	priv->cache = g_hash_table_new (g_direct_hash, g_direct_equal);
 	/* LRU */
@@ -929,7 +928,7 @@ soup_cache_finalize (GObject *object)
 
 	priv = SOUP_CACHE (object)->priv;
 
-	// Cannot use g_hash_table_foreach as callbacks must not modify the hash table
+	/* Cannot use g_hash_table_foreach as callbacks must not modify the hash table */
 	entries = g_hash_table_get_values (priv->cache);
 	g_list_foreach (entries, remove_cache_item, object);
 	g_list_free (entries);
@@ -950,8 +949,17 @@ soup_cache_set_property (GObject *object, guint prop_id,
 
 	switch (prop_id) {
 	case PROP_CACHE_DIR:
+		g_assert (!priv->cache_dir);
+
 		priv->cache_dir = g_value_dup_string (value);
-		/* Create directory if it does not exist (FIXME: should we?) */
+
+		if (!priv->cache_dir)
+			/* Set a default cache dir, different for each user */
+			priv->cache_dir = g_build_filename (g_get_user_cache_dir (),
+							    "httpcache",
+							    NULL);
+
+		/* Create directory if it does not exist */
 		if (!g_file_test (priv->cache_dir, G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR))
 			g_mkdir_with_parents (priv->cache_dir, 0700);
 		break;
@@ -985,32 +993,11 @@ soup_cache_get_property (GObject *object, guint prop_id,
 }
 
 static void
-soup_cache_constructed (GObject *object)
-{
-	SoupCachePrivate *priv;
-
-	priv = SOUP_CACHE (object)->priv;
-
-	if (!priv->cache_dir) {
-		/* Set a default cache dir, different for each user */
-		priv->cache_dir = g_build_filename (g_get_user_cache_dir (),
-						    "httpcache",
-						    NULL);
-		if (!g_file_test (priv->cache_dir, G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR))
-			g_mkdir_with_parents (priv->cache_dir, 0700);
-	}
-
-	if (G_OBJECT_CLASS (soup_cache_parent_class)->constructed)
-		G_OBJECT_CLASS (soup_cache_parent_class)->constructed (object);
-}
-
-static void
 soup_cache_class_init (SoupCacheClass *cache_class)
 {
 	GObjectClass *gobject_class = (GObjectClass *)cache_class;
 
 	gobject_class->finalize = soup_cache_finalize;
-	gobject_class->constructed = soup_cache_constructed;
 	gobject_class->set_property = soup_cache_set_property;
 	gobject_class->get_property = soup_cache_get_property;
 
@@ -1030,8 +1017,6 @@ soup_cache_class_init (SoupCacheClass *cache_class)
 							    SOUP_TYPE_CACHE_TYPE,
 							    SOUP_CACHE_SINGLE_USER,
 							    G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
-
-	g_type_class_add_private (cache_class, sizeof (SoupCachePrivate));
 }
 
 /**
@@ -1047,7 +1032,10 @@ soup_cache_class_init (SoupCacheClass *cache_class)
 
 /**
  * soup_cache_new:
- * @cache_dir: the directory to store the cached data, or %NULL to use the default one
+ * @cache_dir: (allow-none): the directory to store the cached data, or %NULL
+ *   to use the default one. Note that since the cache isn't safe to access for
+ *   multiple processes at once, and the default directory isn't namespaced by
+ *   process, clients are strongly discouraged from passing %NULL.
  * @cache_type: the #SoupCacheType of the cache
  *
  * Creates a new #SoupCache.
@@ -1350,7 +1338,7 @@ soup_cache_clear (SoupCache *cache)
 	g_return_if_fail (SOUP_IS_CACHE (cache));
 	g_return_if_fail (cache->priv->cache);
 
-	// Cannot use g_hash_table_foreach as callbacks must not modify the hash table
+	/* Cannot use g_hash_table_foreach as callbacks must not modify the hash table */
 	entries = g_hash_table_get_values (cache->priv->cache);
 	g_list_foreach (entries, clear_cache_item, cache);
 	g_list_free (entries);
@@ -1494,7 +1482,7 @@ pack_entry (gpointer data,
 void
 soup_cache_dump (SoupCache *cache)
 {
-	SoupCachePrivate *priv = SOUP_CACHE_GET_PRIVATE (cache);
+	SoupCachePrivate *priv = soup_cache_get_instance_private (cache);
 	char *filename;
 	GVariantBuilder entries_builder;
 	GVariant *cache_variant;

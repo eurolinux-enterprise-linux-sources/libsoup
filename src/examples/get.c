@@ -90,6 +90,7 @@ get_url (const char *url)
 				fclose (output_file);
 		}
 	}
+	g_object_unref (msg);
 }
 
 /* Inline class for providing a pre-configured client certificate */
@@ -227,7 +228,6 @@ main (int argc, char **argv)
 	soup_uri_free (parsed);
 
 	session = g_object_new (SOUP_TYPE_SESSION,
-				SOUP_SESSION_SSL_CA_FILE, ca_file,
 				SOUP_SESSION_ADD_FEATURE_BY_TYPE, SOUP_TYPE_CONTENT_DECODER,
 				SOUP_SESSION_ADD_FEATURE_BY_TYPE, SOUP_TYPE_COOKIE_JAR,
 				SOUP_SESSION_USER_AGENT, "get ",
@@ -235,6 +235,8 @@ main (int argc, char **argv)
 				NULL);
 	if (ntlm)
 		soup_session_add_feature_by_type (session, SOUP_TYPE_AUTH_NTLM);
+	if (ca_file)
+		g_object_set (session, "ssl-ca-file", ca_file, NULL);
 
 	if (client_cert_file) {
 		GTlsCertificate *client_cert;
@@ -286,6 +288,8 @@ main (int argc, char **argv)
 
 	if (!synchronous)
 		g_main_loop_unref (loop);
+
+	g_object_unref (session);
 
 	return 0;
 }

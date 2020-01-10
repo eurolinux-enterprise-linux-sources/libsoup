@@ -3,8 +3,8 @@ dnl *** Initialize automake and set version ***
 dnl *******************************************
 
 m4_define([soup_major_version], [2])
-m4_define([soup_minor_version], [56])
-m4_define([soup_micro_version], [0])
+m4_define([soup_minor_version], [62])
+m4_define([soup_micro_version], [2])
 
 AC_PREREQ(2.63)
 AC_INIT([libsoup],[soup_major_version.soup_minor_version.soup_micro_version],[http://bugzilla.gnome.org/enter_bug.cgi?product=libsoup])
@@ -209,13 +209,8 @@ if test "$APACHE_HTTPD" != "no"; then
     AC_MSG_CHECKING([Apache version])
     apache_version=`$APACHE_HTTPD -v 2>/dev/null | sed -ne 's/Server version: Apache\///p'`
     case $apache_version in
-    2.2.*)
-	AC_MSG_RESULT([$apache_version (ok)])
- 	apache_version=2.2
-	;;
     2.4.*)
 	AC_MSG_RESULT([$apache_version (ok)])
- 	apache_version=2.4
 	;;
     *)
 	AC_MSG_RESULT([$apache_version (ignoring)])
@@ -243,47 +238,34 @@ if test "$APACHE_HTTPD" != "no"; then
 	    APACHE_SSL_MODULE_DIR="$dir"
 	    IF_HAVE_APACHE_SSL=""
         fi
-        if test -f $dir/mod_php5.so; then
+        if test -f $dir/libphp7.so; then
 	    APACHE_PHP_MODULE_DIR="$dir"
-	    APACHE_PHP_MODULE=mod_php5.so
-        fi
-        if test -f $dir/libphp5.so; then
-	    APACHE_PHP_MODULE_DIR="$dir"
-	    APACHE_PHP_MODULE=libphp5.so
         fi
     done
     AC_MSG_RESULT($APACHE_MODULE_DIR)
     AC_SUBST(APACHE_MODULE_DIR)
     AC_SUBST(APACHE_SSL_MODULE_DIR)
     AC_SUBST(APACHE_PHP_MODULE_DIR)
-    AC_SUBST(APACHE_PHP_MODULE)
 fi
 
 if test "$APACHE_HTTPD" != "no" -a -n "$APACHE_MODULE_DIR" -a -n "$APACHE_SSL_MODULE_DIR"; then
     AC_DEFINE(HAVE_APACHE, 1, [Whether or not apache can be used for tests])
-    if test $apache_version = 2.2; then
-        AC_DEFINE(HAVE_APACHE_2_2, 1, [Apache is 2.2.x])
-    else
-        AC_DEFINE(HAVE_APACHE_2_4, 1, [Apache is 2.4.x])
-    fi
     have_apache=1
 else
     have_apache=0
 fi
 AM_CONDITIONAL(HAVE_APACHE, test "$have_apache" = 1)
-AM_CONDITIONAL(HAVE_APACHE_2_2, test "$have_apache" = 1 -a "$apache_version" = 2.2)
-AM_CONDITIONAL(HAVE_APACHE_2_4, test "$have_apache" = 1 -a "$apache_version" = 2.4)
 
 if test "$have_apache" = 1; then
-    AC_CHECK_PROGS(PHP, php php5)
+    AC_CHECK_PROGS(PHP, php)
 
     AC_MSG_CHECKING([for Apache PHP module])
-    if test -f $APACHE_PHP_MODULE_DIR/$APACHE_PHP_MODULE; then
-	have_php=yes
+    if test -d "$APACHE_PHP_MODULE_DIR"; then
+	have_php="yes"
 	IF_HAVE_PHP=""
     else
-	have_php=no
-	IF_HAVE_PHP="\#"
+	have_php="no"
+	IF_HAVE_PHP="#"
     fi
     AC_MSG_RESULT($have_php)
     AC_SUBST(IF_HAVE_PHP)
@@ -298,6 +280,13 @@ if test "$have_apache" = 1; then
 	fi
 	AC_MSG_RESULT($have_php_xmlrpc)
     fi
+
+    if test -f "$APACHE_MODULE_DIR/mod_unixd.so"; then
+	IF_HAVE_MOD_UNIXD=""
+    else
+	IF_HAVE_MOD_UNIXD="#"
+    fi
+    AC_SUBST(IF_HAVE_MOD_UNIXD)
 fi
 
 AC_PATH_PROG(CURL, curl, no)
@@ -388,7 +377,7 @@ case "$host" in
         SAVED_CFLAGS="${CFLAGS}"
         CFLAGS="-fvisibility=hidden"
         AC_MSG_CHECKING([for -fvisibility=hidden compiler flag])
-        AC_TRY_COMPILE([], [int main (void) { return 0; }],
+        AC_TRY_COMPILE([], [return 0],
                        AC_MSG_RESULT(yes)
                        enable_fvisibility_hidden=yes,
                        AC_MSG_RESULT(no)
@@ -404,6 +393,13 @@ case "$host" in
 esac
 AC_SUBST(SOUP_HIDDEN_VISIBILITY_CFLAGS)
 
+dnl ****************************************************
+dnl *** Check whether MSVC toolset is explicitly set ***
+dnl ****************************************************
+AM_CONDITIONAL(MSVC_BASE_NO_TOOLSET_SET, [test x$MSVC_BASE_TOOLSET = x])
+AM_CONDITIONAL(MSVC_NO_TOOLSET_SET, [test x$MSVC_TOOLSET = x])
+
+
 dnl *************************
 dnl *** Output Everything ***
 dnl *************************
@@ -418,18 +414,20 @@ AC_CONFIG_FILES([
 	po/Makefile.in
 	po/Makefile
 	tests/Makefile
+	tests/httpd.conf
 	examples/Makefile
 	docs/Makefile
 	docs/reference/Makefile
 	libsoup/soup-version.h
 	config.h.win32
-	build/win32/Makefile
-	build/win32/vs9/Makefile
-	build/win32/vs9/soup-gen-srcs.vsprops
-	build/win32/vs10/Makefile
-	build/win32/vs10/soup-gen-srcs.props
-	build/win32/vs11/Makefile
-	build/win32/vs12/Makefile
-	build/win32/vs14/Makefile
+	win32/Makefile
+	win32/vs9/Makefile
+	win32/vs9/soup-version-paths.vsprops
+	win32/vs10/Makefile
+	win32/vs10/soup-version-paths.props
+	win32/vs11/Makefile
+	win32/vs12/Makefile
+	win32/vs14/Makefile
+	win32/vs15/Makefile
 	])
 AC_OUTPUT

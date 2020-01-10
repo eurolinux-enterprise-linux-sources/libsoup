@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>SoupMultipart: libsoup Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch02.html" title="Core API">
 <link rel="prev" href="libsoup-2.4-Soup-Miscellaneous-Utilities.html" title="Soup Miscellaneous Utilities">
 <link rel="next" href="SoupMultipartInputStream.html" title="SoupMultipartInputStream">
-<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.28.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -34,7 +34,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="SoupMultipart.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -74,7 +74,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<span class="returnvalue">gboolean</span>
 </td>
 <td class="function_name">
 <a class="link" href="SoupMultipart.html#soup-multipart-get-part" title="soup_multipart_get_part ()">soup_multipart_get_part</a> <span class="c_punctuation">()</span>
@@ -117,7 +117,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupMultipart.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -130,7 +130,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupMultipart.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    GBoxed
+<pre class="screen">    <a href="/home/claudio/gnome3/share/gtk-doc/html/gobject/gobject-Boxed-Types.html">GBoxed</a>
     <span class="lineart">╰──</span> SoupMultipart
 </pre>
 </div>
@@ -153,8 +153,8 @@ boundary string. Note that <em class="parameter"><code>mime_type</code></em>
  must be the full MIME type,
 including "multipart/".</p>
 <div class="refsect3">
-<a name="id-1.3.13.8.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-new.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -168,7 +168,7 @@ including "multipart/".</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.13.8.2.6"></a><h4>Returns</h4>
+<a name="soup-multipart-new.returns"></a><h4>Returns</h4>
 <p> a new empty <a class="link" href="SoupMultipart.html" title="SoupMultipart"><span class="type">SoupMultipart</span></a> of the given <em class="parameter"><code>mime_type</code></em>
 </p>
 </div>
@@ -184,8 +184,8 @@ soup_multipart_new_from_message (<em class="parameter"><code><a class="link" hre
  and <em class="parameter"><code>body</code></em>
  to form a new <a class="link" href="SoupMultipart.html" title="SoupMultipart"><span class="type">SoupMultipart</span></a></p>
 <div class="refsect3">
-<a name="id-1.3.13.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-new-from-message.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -206,8 +206,8 @@ soup_multipart_new_from_message (<em class="parameter"><code><a class="link" hre
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.13.8.3.6"></a><h4>Returns</h4>
-<p> a new <a class="link" href="SoupMultipart.html" title="SoupMultipart"><span class="type">SoupMultipart</span></a> (or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if the
+<a name="soup-multipart-new-from-message.returns"></a><h4>Returns</h4>
+<p>a new <a class="link" href="SoupMultipart.html" title="SoupMultipart"><span class="type">SoupMultipart</span></a> (or <code class="literal">NULL</code> if the
 message couldn't be parsed or wasn't multipart). </p>
 <p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></p>
 </div>
@@ -221,8 +221,8 @@ soup_multipart_free (<em class="parameter"><code><a class="link" href="SoupMulti
 <p>Frees <em class="parameter"><code>multipart</code></em>
 </p>
 <div class="refsect3">
-<a name="id-1.3.13.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-free.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -245,8 +245,8 @@ soup_multipart_get_length (<em class="parameter"><code><a class="link" href="Sou
 <p>Gets the number of body parts in <em class="parameter"><code>multipart</code></em>
 </p>
 <div class="refsect3">
-<a name="id-1.3.13.8.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-get-length.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -260,7 +260,7 @@ soup_multipart_get_length (<em class="parameter"><code><a class="link" href="Sou
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.13.8.5.6"></a><h4>Returns</h4>
+<a name="soup-multipart-get-length.returns"></a><h4>Returns</h4>
 <p> the number of body parts in <em class="parameter"><code>multipart</code></em>
 </p>
 </div>
@@ -269,7 +269,7 @@ soup_multipart_get_length (<em class="parameter"><code><a class="link" href="Sou
 <hr>
 <div class="refsect2">
 <a name="soup-multipart-get-part"></a><h3>soup_multipart_get_part ()</h3>
-<pre class="programlisting"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+<pre class="programlisting"><span class="returnvalue">gboolean</span>
 soup_multipart_get_part (<em class="parameter"><code><a class="link" href="SoupMultipart.html" title="SoupMultipart"><span class="type">SoupMultipart</span></a> *multipart</code></em>,
                          <em class="parameter"><code><span class="type">int</span> part</code></em>,
                          <em class="parameter"><code><a class="link" href="SoupMessageHeaders.html" title="SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> **headers</code></em>,
@@ -277,8 +277,8 @@ soup_multipart_get_part (<em class="parameter"><code><a class="link" href="SoupM
 <p>Gets the indicated body part from <em class="parameter"><code>multipart</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.13.8.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-get-part.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -297,13 +297,13 @@ soup_multipart_get_part (<em class="parameter"><code><a class="link" href="SoupM
 </tr>
 <tr>
 <td class="parameter_name"><p>headers</p></td>
-<td class="parameter_description"><p> return location for the MIME part
+<td class="parameter_description"><p>return location for the MIME part
 headers. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>body</p></td>
-<td class="parameter_description"><p> return location for the MIME part
+<td class="parameter_description"><p>return location for the MIME part
 body. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
 </tr>
@@ -311,8 +311,8 @@ body. </p></td>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.13.8.6.6"></a><h4>Returns</h4>
-<p> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> on success, <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if <em class="parameter"><code>part</code></em>
+<a name="soup-multipart-get-part.returns"></a><h4>Returns</h4>
+<p> <code class="literal">TRUE</code> on success, <code class="literal">FALSE</code> if <em class="parameter"><code>part</code></em>
 is out of range (in
 which case <em class="parameter"><code>headers</code></em>
 and <em class="parameter"><code>body</code></em>
@@ -335,8 +335,8 @@ soup_multipart_append_part (<em class="parameter"><code><a class="link" href="So
 you should free your copies if you are not using them for anything
 else.)</p>
 <div class="refsect3">
-<a name="id-1.3.13.8.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-append-part.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -377,8 +377,8 @@ soup_multipart_append_form_string (<em class="parameter"><code><a class="link" h
 specification. See <a class="link" href="libsoup-2.4-HTML-Form-Support.html#soup-form-request-new-from-multipart" title="soup_form_request_new_from_multipart ()"><code class="function">soup_form_request_new_from_multipart()</code></a> for more
 details.</p>
 <div class="refsect3">
-<a name="id-1.3.13.8.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-append-form-string.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -422,8 +422,8 @@ soup_multipart_append_form_file (<em class="parameter"><code><a class="link" hre
 specification. See <a class="link" href="libsoup-2.4-HTML-Form-Support.html#soup-form-request-new-from-multipart" title="soup_form_request_new_from_multipart ()"><code class="function">soup_form_request_new_from_multipart()</code></a> for more
 details.</p>
 <div class="refsect3">
-<a name="id-1.3.13.8.9.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-append-form-file.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -442,12 +442,12 @@ details.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>filename</p></td>
-<td class="parameter_description"><p>the name of the file, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if not known</p></td>
+<td class="parameter_description"><p>the name of the file, or <code class="literal">NULL</code> if not known</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
 <td class="parameter_name"><p>content_type</p></td>
-<td class="parameter_description"><p>the MIME type of the file, or <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if not known</p></td>
+<td class="parameter_description"><p>the MIME type of the file, or <code class="literal">NULL</code> if not known</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -472,8 +472,8 @@ soup_multipart_to_message (<em class="parameter"><code><a class="link" href="Sou
  and <em class="parameter"><code>dest_body</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.13.8.10.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-multipart-to-message.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -528,6 +528,6 @@ explicitly state otherwise. In other words, don't try to use
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.24</div>
+<hr>Generated by GTK-Doc V1.28.1</div>
 </body>
 </html>

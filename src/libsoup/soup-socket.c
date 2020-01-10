@@ -30,12 +30,6 @@
  * soup_socket_get_remote_address()) may be useful to applications.
  **/
 
-static void soup_socket_initable_interface_init (GInitableIface *initable_interface);
-
-G_DEFINE_TYPE_WITH_CODE (SoupSocket, soup_socket, G_TYPE_OBJECT,
-			 G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-						soup_socket_initable_interface_init))
-
 enum {
 	READABLE,
 	WRITABLE,
@@ -102,7 +96,13 @@ typedef struct {
 	GCancellable *connect_cancel;
 	int fd;
 } SoupSocketPrivate;
-#define SOUP_SOCKET_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), SOUP_TYPE_SOCKET, SoupSocketPrivate))
+
+static void soup_socket_initable_interface_init (GInitableIface *initable_interface);
+
+G_DEFINE_TYPE_WITH_CODE (SoupSocket, soup_socket, G_TYPE_OBJECT,
+                         G_ADD_PRIVATE (SoupSocket)
+			 G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+						soup_socket_initable_interface_init))
 
 static void soup_socket_peer_certificate_changed (GObject *conn,
 						  GParamSpec *pspec,
@@ -113,7 +113,7 @@ static void finish_listener_setup (SoupSocket *sock);
 static void
 soup_socket_init (SoupSocket *sock)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	priv->non_blocking = TRUE;
 	priv->fd = -1;
@@ -127,7 +127,7 @@ soup_socket_initable_init (GInitable     *initable,
 			   GError       **error)
 {
 	SoupSocket *sock = SOUP_SOCKET (initable);
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	if (priv->conn) {
 		g_warn_if_fail (priv->gsock == NULL);
@@ -145,7 +145,7 @@ soup_socket_initable_init (GInitable     *initable,
 		if (getsockopt (priv->fd, SOL_SOCKET, SO_TYPE,
 				(gpointer)&type, (gpointer)&len) == -1) {
 			g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-					     _("Can't import non-socket as SoupSocket"));
+					     _("Can’t import non-socket as SoupSocket"));
 			return FALSE;
 		}
 
@@ -172,7 +172,7 @@ soup_socket_initable_init (GInitable     *initable,
 			finish_listener_setup (sock);
 		else if (!g_socket_is_connected (priv->gsock)) {
 			g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-					     _("Can't import unconnected socket"));
+					     _("Can’t import unconnected socket"));
 			return FALSE;
 		}
 	}
@@ -183,11 +183,12 @@ soup_socket_initable_init (GInitable     *initable,
 static void
 disconnect_internal (SoupSocket *sock, gboolean close)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	g_clear_object (&priv->gsock);
 	if (priv->conn && close) {
 		g_io_stream_close (priv->conn, NULL, NULL);
+		g_signal_handlers_disconnect_by_data (priv->conn, sock);
 		g_clear_object (&priv->conn);
 	}
 
@@ -204,7 +205,8 @@ disconnect_internal (SoupSocket *sock, gboolean close)
 static void
 soup_socket_finalize (GObject *object)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (object);
+	SoupSocket *sock = SOUP_SOCKET (object);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	if (priv->connect_cancel) {
 		if (priv->clean_dispose)
@@ -245,7 +247,7 @@ soup_socket_finalize (GObject *object)
 static void
 finish_socket_setup (SoupSocket *sock)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	if (priv->gsock) {
 		if (!priv->conn)
@@ -270,7 +272,8 @@ static void
 soup_socket_set_property (GObject *object, guint prop_id,
 			  const GValue *value, GParamSpec *pspec)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (object);
+	SoupSocket *sock = SOUP_SOCKET (object);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 	SoupSocketProperties *props;
 
 	switch (prop_id) {
@@ -371,7 +374,8 @@ static void
 soup_socket_get_property (GObject *object, guint prop_id,
 			  GValue *value, GParamSpec *pspec)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (object);
+	SoupSocket *sock = SOUP_SOCKET (object);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	switch (prop_id) {
 	case PROP_FD:
@@ -432,8 +436,6 @@ static void
 soup_socket_class_init (SoupSocketClass *socket_class)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (socket_class);
-
-	g_type_class_add_private (socket_class, sizeof (SoupSocketPrivate));
 
 	/* virtual method override */
 	object_class->finalize = soup_socket_finalize;
@@ -851,7 +853,7 @@ re_emit_socket_client_event (GSocketClient       *client,
 static gboolean
 socket_connect_finish (SoupSocket *sock, GSocketConnection *conn)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	g_clear_object (&priv->connect_cancel);
 
@@ -883,7 +885,7 @@ socket_legacy_error (SoupSocket *sock, GError *error)
 static GSocketClient *
 new_socket_client (SoupSocket *sock)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 	GSocketClient *client = g_socket_client_new ();
 
 	g_signal_connect (client, "event",
@@ -943,7 +945,7 @@ soup_socket_connect_async_internal (SoupSocket          *sock,
 	GTask *task;
 
 	g_return_if_fail (SOUP_IS_SOCKET (sock));
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 	g_return_if_fail (!priv->is_server);
 	g_return_if_fail (priv->gsock == NULL);
 	g_return_if_fail (priv->remote_addr != NULL);
@@ -1017,7 +1019,7 @@ soup_socket_connect_async (SoupSocket *sock, GCancellable *cancellable,
 	SoupSocketAsyncConnectData *sacd;
 
 	g_return_if_fail (SOUP_IS_SOCKET (sock));
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 	g_return_if_fail (!priv->is_server);
 	g_return_if_fail (priv->gsock == NULL);
 	g_return_if_fail (priv->remote_addr != NULL);
@@ -1048,7 +1050,7 @@ soup_socket_connect_sync_internal (SoupSocket    *sock,
 	GSocketConnection *conn;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), SOUP_STATUS_MALFORMED);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 	g_return_val_if_fail (!priv->is_server, SOUP_STATUS_MALFORMED);
 	g_return_val_if_fail (priv->gsock == NULL, SOUP_STATUS_MALFORMED);
 	g_return_val_if_fail (priv->remote_addr != NULL, SOUP_STATUS_MALFORMED);
@@ -1084,7 +1086,7 @@ soup_socket_connect_sync (SoupSocket *sock, GCancellable *cancellable)
 	GError *error = NULL;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), SOUP_STATUS_MALFORMED);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 	g_return_val_if_fail (!priv->is_server, SOUP_STATUS_MALFORMED);
 	g_return_val_if_fail (priv->gsock == NULL, SOUP_STATUS_MALFORMED);
 	g_return_val_if_fail (priv->remote_addr != NULL, SOUP_STATUS_MALFORMED);
@@ -1109,17 +1111,25 @@ soup_socket_connect_sync (SoupSocket *sock, GCancellable *cancellable)
 int
 soup_socket_get_fd (SoupSocket *sock)
 {
+	SoupSocketPrivate *priv;
+
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), -1);
 
-	return g_socket_get_fd (SOUP_SOCKET_GET_PRIVATE (sock)->gsock);
+	priv = soup_socket_get_instance_private (sock);
+
+	return g_socket_get_fd (priv->gsock);
 }
 
 GSocket *
 soup_socket_get_gsocket (SoupSocket *sock)
 {
+	SoupSocketPrivate *priv;
+
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), NULL);
 
-	return SOUP_SOCKET_GET_PRIVATE (sock)->gsock;
+	priv = soup_socket_get_instance_private (sock);
+
+	return priv->gsock;
 }
 
 GSocket *
@@ -1129,7 +1139,7 @@ soup_socket_steal_gsocket (SoupSocket *sock)
 	GSocket *gsock;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), NULL);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	gsock = priv->gsock;
 	priv->gsock = NULL;
@@ -1145,7 +1155,7 @@ soup_socket_is_readable (SoupSocket *sock)
 	SoupSocketPrivate *priv;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), FALSE);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	return g_pollable_input_stream_is_readable (G_POLLABLE_INPUT_STREAM (priv->istream));
 }
@@ -1153,17 +1163,25 @@ soup_socket_is_readable (SoupSocket *sock)
 GIOStream *
 soup_socket_get_connection (SoupSocket *sock)
 {
+	SoupSocketPrivate *priv;
+
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), NULL);
 
-	return SOUP_SOCKET_GET_PRIVATE (sock)->conn;
+	priv = soup_socket_get_instance_private (sock);
+
+	return priv->conn;
 }
 
 GIOStream *
 soup_socket_get_iostream (SoupSocket *sock)
 {
+	SoupSocketPrivate *priv;
+
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), NULL);
 
-	return SOUP_SOCKET_GET_PRIVATE (sock)->iostream;
+	priv = soup_socket_get_instance_private (sock);
+
+	return priv->iostream;
 }
 
 static GSource *
@@ -1189,7 +1207,7 @@ static gboolean
 listen_watch (GObject *pollable, gpointer data)
 {
 	SoupSocket *sock = data, *new;
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock), *new_priv;
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock), *new_priv;
 	GSocket *new_gsock;
 
 	new_gsock = g_socket_accept (priv->gsock, NULL, NULL);
@@ -1197,7 +1215,7 @@ listen_watch (GObject *pollable, gpointer data)
 		return FALSE;
 
 	new = g_object_new (SOUP_TYPE_SOCKET, NULL);
-	new_priv = SOUP_SOCKET_GET_PRIVATE (new);
+	new_priv = soup_socket_get_instance_private (new);
 	new_priv->gsock = new_gsock;
 	if (priv->async_context)
 		new_priv->async_context = g_main_context_ref (priv->async_context);
@@ -1226,7 +1244,7 @@ listen_watch (GObject *pollable, gpointer data)
 static void
 finish_listener_setup (SoupSocket *sock)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	priv->is_server = TRUE;
 	priv->watch_src = soup_socket_create_watch (priv, G_IO_IN,
@@ -1269,7 +1287,7 @@ soup_socket_listen_full (SoupSocket *sock,
 	GSocketAddress *addr;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), FALSE);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 	g_return_val_if_fail (priv->gsock == NULL, FALSE);
 	g_return_val_if_fail (priv->local_addr != NULL, FALSE);
 
@@ -1328,7 +1346,7 @@ static void
 soup_socket_peer_certificate_changed (GObject *conn, GParamSpec *pspec,
 				      gpointer sock)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	priv->tls_errors = g_tls_connection_get_peer_certificate_errors (G_TLS_CONNECTION (priv->conn));
 
@@ -1349,7 +1367,7 @@ soup_socket_setup_ssl (SoupSocket    *sock,
 		       GCancellable  *cancellable,
 		       GError       **error)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 	GTlsBackend *backend = g_tls_backend_get_default ();
 
 	if (G_IS_TLS_CONNECTION (priv->conn))
@@ -1436,7 +1454,7 @@ soup_socket_setup_ssl (SoupSocket    *sock,
 gboolean
 soup_socket_start_ssl (SoupSocket *sock, GCancellable *cancellable)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	return soup_socket_setup_ssl (sock, soup_address_get_name (priv->remote_addr),
 				      cancellable, NULL);
@@ -1466,7 +1484,7 @@ soup_socket_handshake_sync (SoupSocket    *sock,
 			    GCancellable  *cancellable,
 			    GError       **error)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	if (!soup_socket_setup_ssl (sock, ssl_host, cancellable, error))
 		return FALSE;
@@ -1490,7 +1508,7 @@ handshake_async_ready (GObject *source, GAsyncResult *result, gpointer user_data
 	if (g_tls_connection_handshake_finish (G_TLS_CONNECTION (source),
 					       result, &error)) {
 		SoupSocket *sock = g_task_get_source_object (task);
-		SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+		SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 		soup_socket_event (sock, G_SOCKET_CLIENT_TLS_HANDSHAKED, priv->conn);
 		g_task_return_boolean (task, TRUE);
@@ -1506,7 +1524,7 @@ soup_socket_handshake_async (SoupSocket          *sock,
 			     GAsyncReadyCallback  callback,
 			     gpointer             user_data)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 	GTask *task;
 	GError *error = NULL;
 
@@ -1545,7 +1563,7 @@ soup_socket_handshake_finish (SoupSocket    *sock,
 gboolean
 soup_socket_is_ssl (SoupSocket *sock)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	return priv->ssl;
 }
@@ -1564,7 +1582,7 @@ soup_socket_disconnect (SoupSocket *sock)
 	gboolean already_disconnected = FALSE;
 
 	g_return_if_fail (SOUP_IS_SOCKET (sock));
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	if (priv->connect_cancel) {
 		disconnect_internal (sock, FALSE);
@@ -1621,7 +1639,7 @@ soup_socket_is_connected (SoupSocket *sock)
 	SoupSocketPrivate *priv;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), FALSE);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	return priv->conn && !g_io_stream_is_closed (priv->conn);
 }
@@ -1643,7 +1661,7 @@ soup_socket_get_local_address (SoupSocket *sock)
 	SoupSocketPrivate *priv;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), NULL);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	g_mutex_lock (&priv->addrlock);
 	if (!priv->local_addr) {
@@ -1691,7 +1709,7 @@ soup_socket_get_remote_address (SoupSocket *sock)
 	SoupSocketPrivate *priv;
 
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), NULL);
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	g_mutex_lock (&priv->addrlock);
 	if (!priv->remote_addr) {
@@ -1725,7 +1743,7 @@ unlock:
 SoupURI *
 soup_socket_get_http_proxy_uri (SoupSocket *sock)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 	GSocketAddress *addr;
 	GProxyAddress *paddr;
 	SoupURI *uri;
@@ -1752,7 +1770,7 @@ static gboolean
 socket_read_watch (GObject *pollable, gpointer user_data)
 {
 	SoupSocket *sock = user_data;
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	priv->read_src = NULL;
 	g_signal_emit (sock, signals[READABLE], 0);
@@ -1764,7 +1782,7 @@ translate_read_status (SoupSocket *sock, GCancellable *cancellable,
 		       gssize my_nread, gsize *nread,
 		       GError *my_err, GError **error)
 {
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	if (my_nread > 0) {
 		g_assert_no_error (my_err);
@@ -1839,7 +1857,7 @@ soup_socket_read (SoupSocket *sock, gpointer buffer, gsize len,
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), SOUP_SOCKET_ERROR);
 	g_return_val_if_fail (nread != NULL, SOUP_SOCKET_ERROR);
 
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	g_mutex_lock (&priv->iolock);
 
@@ -1909,7 +1927,7 @@ soup_socket_read_until (SoupSocket *sock, gpointer buffer, gsize len,
 	g_return_val_if_fail (nread != NULL, SOUP_SOCKET_ERROR);
 	g_return_val_if_fail (len >= boundary_len, SOUP_SOCKET_ERROR);
 
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	g_mutex_lock (&priv->iolock);
 
@@ -1935,7 +1953,7 @@ static gboolean
 socket_write_watch (GObject *pollable, gpointer user_data)
 {
 	SoupSocket *sock = user_data;
-	SoupSocketPrivate *priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	SoupSocketPrivate *priv = soup_socket_get_instance_private (sock);
 
 	priv->write_src = NULL;
 	g_signal_emit (sock, signals[WRITABLE], 0);
@@ -1980,7 +1998,7 @@ soup_socket_write (SoupSocket *sock, gconstpointer buffer,
 	g_return_val_if_fail (SOUP_IS_SOCKET (sock), SOUP_SOCKET_ERROR);
 	g_return_val_if_fail (nwrote != NULL, SOUP_SOCKET_ERROR);
 
-	priv = SOUP_SOCKET_GET_PRIVATE (sock);
+	priv = soup_socket_get_instance_private (sock);
 
 	g_mutex_lock (&priv->iolock);
 

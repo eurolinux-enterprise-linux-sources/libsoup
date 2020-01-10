@@ -1,3 +1,216 @@
+Changes in libsoup from 2.62.1 to 2.62.2:
+
+	* Fixes to instrospection annotation [#795135,
+	Claudio Saavedra]
+
+	* Fixes to the test suite with PHP version >= 7.2
+	[#795111, Jan Alexander Steffens]
+
+	* Critical warning fixes to SoupSocket [Carlos Garcia Campos]
+
+	* Updated Romanian translation.
+
+Changes in libsoup from 2.62.0 to 2.62.1:
+
+	* Fix digest authentication with encoded URIs
+	  [#794208, Claudio Saavedra]
+	* Avoid unaligned memory accesses in WebSocket implementation
+	  [#794421, Rolf Eike Beer]
+	* Use base domain to decide if cookies are third-party
+	  [#792130, Michael Catanzaro]
+	* Fix crash under soup_socket_new()
+	  [#762138, Milan Crha]
+
+Changes in libsoup from 2.61.91 to 2.62.0:
+
+	* Updated translations.
+
+Changes in libsoup from 2.61.90 to 2.61.91:
+
+	* Add limit to header length to avoid DOS attacks
+	  [#792173, Michele Dionisio]
+
+        * Update the public-suffix list.
+	  [Claudio Saavedra]
+
+        * Revert "cookie-jar: use base domain to decide if cookie is third party"
+	  [#792130, Claudio Saavedra]
+
+Changes in libsoup from 2.61.2 to 2.61.90:
+
+	* Various improvements to the WebSocket implementation
+          [#792113, Italo Guerrieri]
+
+	 * cookie-jar: use base domain to decide if cookie is third party
+	  [#792130, Michael Catanzaro]
+
+	 * Add new API to create a new connection from a SoupSession
+	  [#792212, Carlos Garcia Campos]
+
+	 * soup-headers: accept any 3 digit number as message status code
+	  [#792124, Carlos Garcia Campos]
+
+Changes in libsoup from 2.61.1 to 2.61.2:
+
+	* session: don't request Keep-Alive for upgraded connections
+	  [#788723, Lionel Landwerlin]
+
+Changes in libsoup from 2.60.2 to 2.61.1:
+
+	* tld-parser: use Python 3 [#785735, Ross Burton]
+
+	* Fix heap-buffer-overflow in soup_ntlm_parse_challenge()
+	  [#788037, Milan Crha]
+
+	* Fix possibly uninitialized value in ssl-test
+	  [Tomas Popela]
+
+	* SoupCache: fix the timestamp for responses [#791031,
+	  Claudio Saavedra]
+
+Changes in libsoup from 2.60.1 to 2.60.2:
+
+	* Fix documentation typos [#788920, Nirbheek Chauhan]
+
+	* format-zero-length warning triggered in soup-logger.c
+	  [#789096, Tomas Popela]
+
+	* Warnings while generating inrospection files
+	  [#789099, Tomas Popela]
+
+	* Visual Studio builds: Enhance security of x64 binaries
+	  [Chun-wei Fan]
+
+	* Updated translation: Nepali.
+
+Changes in libsoup from 2.60.0 to 2.60.1:
+
+	* Fallback to another authentication type if the current
+          failed [#788238, Tomas Popela]
+
+	* Fix unbalanced G_GNUC_BEGIN_IGNORE_DEPRECATIONS use in
+          soup-session.c [#787166, Zan Dobersek]
+
+	* SoupCache: fix setting default value for cache dir
+	  [#788452, Cosimo Cecchi]
+
+	* Updated translations: Catalan (Valencian).
+
+Changes in libsoup from 2.59.90.1 to 2.60.0:
+
+	* New/updated translations: Catalan, Danish, Dutch, Nepali
+
+Changes in libsoup from 2.59.90 to 2.59.90.1:
+
+	* CVE-2017-2885: Fixed a chunked decoding buffer overrun that
+          could be exploited against either clients or servers.
+          [#785774]
+
+Changes in libsoup from 2.58.0 to 2.59.90:
+
+	* Several SoupAuthNegotiate compatibility fixes [#783780,
+          #783781, Tomas Popela]
+
+	* Include a payload in SoupWebsocketConnection's "ping"
+          messages (to avoid problems with certain buggy server
+          implementations), and emit a signal when receiving a "pong"
+          (to allow apps to notice when the remote peer has
+          disconnected them). [#785660, David Woodhouse]
+
+	* Fix the interpretation of wss:// URIs, which previously
+          mostly didn't work. [#784766, Nirbheek Chauhan].
+
+	* Fixed SoupContentSniffer behavior on XML files with no
+          Content-Type
+          [https://bugs.webkit.org/show_bug.cgi?id=173923]
+
+	* Fixed a bug with cancelling async requests [#773257, Carlos
+          Garcia Campos]
+
+	* Reverted the (undocumented) change in 2.58.0 to call
+          soup_session_abort() after changing
+          SoupSession:proxy-resolver; while this made its behavior
+          more consistent with :proxy-uri, it ended up breaking
+          things. [#781590]
+
+	* Allow HTTP responses that have no trailing CRLF after the
+          response headers (and no body) [#780352, Carlos Garcia
+          Campos]
+
+	* Fixed an out-of-bounds read in SoupURI parsing [#785042]
+
+	* Fixed a spurious (debug-level) error message in
+          SoupWebsocketConnection [#784935, Ignacio Casal Quinteiro]
+
+	* Fixed introspection annotations on
+          soup_message_headers_get_content_range() [Philip Withnall]
+
+	* Fixed a flake in tests/header-parsing [#777258]
+
+	* Update tests/test-cert.pem to use stronger algorithms to
+          avoid problems with newer gnutls. [#784949, Jan Alexander
+          Steffens]
+
+	* Fixed examples/get to not accidentally break https
+          certificate validation [#784259, Sebatian Dröge]
+
+	* Misc updates to apache/php stuff in unit tests:
+		* Dropped support for Apache 2.2
+		* Deal with mod_unixd being compiled-in [#776478]
+		* Switched PHP support from PHP 5 to PHP 7
+
+	* Updated translations:
+	  Esperanto, Turkish
+
+Changes in libsoup from 2.2.57.1 to 2.58.0:
+
+	* Fix authentication issues when the SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE
+	  flag is used. [#778497, #777936, Carlos Garcia Campos]
+
+	* MSVC build improvements (Chun-wei Fan)
+
+	* Updated translations:
+	  Basque, Belarusian, Brazilian Portuguese, Chinese (Taiwan), Danish,
+	  French, Galician, Greek, Indonesian, Italian, Korean, Latvian,
+	  Lithuanian, Norwegian bokmål, Russian, Serbian, Slovak, Slovenian,
+	  Spanish, zh_CN
+
+Changes in libsoup from 2.56.0 to 2.57.1:
+
+	* Added SoupWebsocketConnection:keepalive-interval, to make a
+          connection send regular pings. [#773253, Ignacio Casal
+          Quinteiro]
+
+	* Added soup_auth_manager_clear_cached_credentials() and
+          SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE, to allow greater control
+          over the use of cached HTTP auth credentials. [#774031,
+          #774033, Carlos Garcia Campos]
+
+	* Fixed the use of SoupSession:proxy-uri values containing
+          passwords. [#772932, Jonathan Lebon]
+
+	* Various minor WebSocket fixes [Ignacio Casal Quinteiro]:
+		* Avoid sending data after we start closing the
+		  connection [#774957]
+		* Do not log a critical if the peer sends an invalid
+		  close status code
+		* Log a debug message when a "pong" is received
+
+	* Fixed introspection of
+          soup_message_headers_get_content_range() [Jasper St. Pierre]
+
+	* Replaced Vala [Deprecated] annotations with [Version] to
+          avoid build warnings [#773177, Evan Nemerson]
+
+	* MSVC build improvements (Chun-wei Fan)
+
+	* Updated error/message strings to use Unicode punctuation.
+          [#772217, Piotr Drąg]
+
+	* Updated translations:
+	  Czech, Friulian, German, Hebrew, Hungarian,
+	  Norwegian bokmål, Polish, Swedish
+
 Changes in libsoup from 2.55.90 to 2.56.0:
 
 	* Added SoupWebsocketConnection:max-incoming-payload-size

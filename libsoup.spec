@@ -1,33 +1,20 @@
 %define glib2_version 2.38.0
 
 Name: libsoup
-Version: 2.56.0
-Release: 6%{?dist}
+Version: 2.62.2
+Release: 2%{?dist}
 Summary: Soup, an HTTP library implementation
 
 License: LGPLv2
 URL: https://wiki.gnome.org/Projects/libsoup
-Source0: https://download.gnome.org/sources/%{name}/2.56/%{name}-%{version}.tar.xz
+Source0: https://download.gnome.org/sources/%{name}/2.62/%{name}-%{version}.tar.xz
 
 Patch01: coverity-scan-issues.patch
-# https://bugzilla.redhat.com/show_bug.cgi?id=1439798
-# https://bugzilla.gnome.org/show_bug.cgi?id=782939
-Patch02: get-leaks.patch
-# https://bugzilla.gnome.org/show_bug.cgi?id=782940
-Patch03: negotiate-internals.patch
-# https://bugzilla.gnome.org/show_bug.cgi?id=783780
-Patch04: negotiate-connection-close.patch
-# https://bugzilla.gnome.org/show_bug.cgi?id=783781
-Patch05: tcms-site-warning.patch
-# https://bugzilla.gnome.org/show_bug.cgi?id=785774
-# https://bugzilla.redhat.com/show_bug.cgi?id=1479281
-Patch06: chunked-decoding-buffer-overrun-CVE-2017-2885.patch
-# http://bugzilla.gnome.org/show_bug.cgi?id=788238
-# https://bugzilla.redhat.com/show_bug.cgi?id=1495552
-Patch07: auth-try-all-available.patch
-# https://bugzilla.redhat.com/show_bug.cgi?id=1513355
-Patch08: crash-under-soup_socket_new.patch
+# Downstream patch to support Python 2
+Patch02: libsoup-python2.patch
+Patch03: 0001-cookie-jar-bail-if-hostname-is-an-empty-string.patch
 
+BuildRequires: chrpath
 BuildRequires: glib2-devel >= %{glib2_version}
 BuildRequires: glib-networking
 BuildRequires: intltool
@@ -62,13 +49,8 @@ you to develop applications that use the libsoup library.
 %prep
 %setup -q
 %patch01 -p1 -b .coverity-scan-issues
-%patch02 -p1 -b .get-leaks
-%patch03 -p1 -b .negotiate-internals
-%patch04 -p1 -b .negotiate-connection-close
-%patch05 -p1 -b .tcms-site-warning
-%patch06 -p1 -b .cve-2017-2885
-%patch07 -p1 -b .auth-try-all
-%patch08 -p1 -b .crash-under-soup_socket_new
+%patch02 -p1 -b .python2
+%patch03 -p1 -b .cve-2018-12910
 
 %build
 %configure --disable-static
@@ -82,6 +64,9 @@ make %{?_smp_mflags}
 %make_install
 
 rm -f $RPM_BUILD_ROOT/%{_libdir}/*.la
+
+# Remove lib64 rpaths
+chrpath --delete $RPM_BUILD_ROOT%{_libdir}/*.so
 
 %find_lang libsoup
 
@@ -108,6 +93,18 @@ rm -f $RPM_BUILD_ROOT/%{_libdir}/*.la
 %{_datadir}/vala/vapi/libsoup-2.4.vapi
 
 %changelog
+* Mon Jul 09 2018 Milan Crha <mcrha@redhat.com> - 2.62.2-2
+- Backport upstream patch for CVE-2018-12910 - Crash in soup_cookie_jar.c: get_cookies() on empty hostnames
+- Resolves: #1598838
+
+* Tue May 08 2018 Kalev Lember <klember@redhat.com> - 2.62.2-1
+- Update to 2.62.2
+- Resolves: #1569734
+
+* Mon Apr 09 2018 Kalev Lember <klember@redhat.com> - 2.62.1-1
+- Update to 2.62.1
+- Resolves: #1569734
+
 * Wed Nov 15 2017 Milan Crha <mcrha@redhat.com> - 2.56.0-6
 - Fix for crash under soup_socket_new() (rh #1513355)
 

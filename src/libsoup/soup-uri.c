@@ -33,7 +33,7 @@
  * @scheme: the URI scheme (eg, "http")
  * @user: a username, or %NULL
  * @password: a password, or %NULL
- * @host: the hostname or IP address
+ * @host: the hostname or IP address, or %NULL
  * @port: the port number on @host
  * @path: the path on @host
  * @query: a query for @path, or %NULL
@@ -453,7 +453,7 @@ soup_uri_new_with_base (SoupURI *base, const char *uri_string)
 		}
 		/* Remove "<segment>/.." at end where <segment> != ".." */
 		q = strrchr (uri->path, '/');
-		if (q && !strcmp (q, "/..")) {
+		if (q && q != uri->path && !strcmp (q, "/..")) {
 			p = q - 1;
 			while (p > uri->path && *p != '/')
 				p--;
@@ -530,7 +530,7 @@ soup_uri_new (const char *uri_string)
 
 char *
 soup_uri_to_string_internal (SoupURI *uri, gboolean just_path_and_query,
-			     gboolean force_port)
+			     gboolean include_password, gboolean force_port)
 {
 	GString *str;
 	char *return_result;
@@ -546,6 +546,10 @@ soup_uri_to_string_internal (SoupURI *uri, gboolean just_path_and_query,
 		g_string_append (str, "//");
 		if (uri->user) {
 			append_uri_encoded (str, uri->user, ":;@?/");
+			if (uri->password && include_password) {
+				g_string_append_c (str, ':');
+				append_uri_encoded (str, uri->password, ";@?/");
+			}
 			g_string_append_c (str, '@');
 		}
 		if (strchr (uri->host, ':')) {
@@ -611,7 +615,7 @@ soup_uri_to_string_internal (SoupURI *uri, gboolean just_path_and_query,
 char *
 soup_uri_to_string (SoupURI *uri, gboolean just_path_and_query)
 {
-	return soup_uri_to_string_internal (uri, just_path_and_query, FALSE);
+	return soup_uri_to_string_internal (uri, just_path_and_query, FALSE, FALSE);
 }
 
 /**
@@ -1330,9 +1334,11 @@ soup_uri_is_http (SoupURI *uri, char **aliases)
 {
 	int i;
 
-	if (uri->scheme == SOUP_URI_SCHEME_HTTP)
+	if (uri->scheme == SOUP_URI_SCHEME_HTTP ||
+	    uri->scheme == SOUP_URI_SCHEME_WS)
 		return TRUE;
-	else if (uri->scheme == SOUP_URI_SCHEME_HTTPS)
+	else if (uri->scheme == SOUP_URI_SCHEME_HTTPS ||
+		 uri->scheme == SOUP_URI_SCHEME_WSS)
 		return FALSE;
 	else if (!aliases)
 		return FALSE;
@@ -1353,9 +1359,11 @@ soup_uri_is_https (SoupURI *uri, char **aliases)
 {
 	int i;
 
-	if (uri->scheme == SOUP_URI_SCHEME_HTTPS)
+	if (uri->scheme == SOUP_URI_SCHEME_HTTPS ||
+	    uri->scheme == SOUP_URI_SCHEME_WSS)
 		return TRUE;
-	else if (uri->scheme == SOUP_URI_SCHEME_HTTP)
+	else if (uri->scheme == SOUP_URI_SCHEME_HTTP ||
+		 uri->scheme == SOUP_URI_SCHEME_WS)
 		return FALSE;
 	else if (!aliases)
 		return FALSE;

@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>libsoup Server Basics: libsoup Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch01.html" title="Tutorial">
 <link rel="prev" href="libsoup-session-porting.html" title="Porting to the new SoupSession">
 <link rel="next" href="ch02.html" title="Core API">
-<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.28.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -48,7 +48,7 @@ a few additional options:
 <tr>
 <td><p><span class="term"><a class="link" href="SoupServer.html#SOUP-SERVER-TLS-CERTIFICATE:CAPS" title="SOUP_SERVER_TLS_CERTIFICATE"><code class="literal">SOUP_SERVER_TLS_CERTIFICATE</code></a></span></p></td>
 <td><p>
-	    A <a href="https://developer.gnome.org/gio/unstable/GTlsCertificate.html"><span class="type">GTlsCertificate</span></a>
+	    A <span class="type">GTlsCertificate</span>
 	    (containing a private key) that will be used when handling
 	    HTTPS requests on the server.
 	</p></td>
@@ -89,7 +89,7 @@ a few additional options:
 <a name="id-1.2.6.4"></a><h3>Adding Listening Sockets</h3>
 <p>
   To tell the server where to listen, call <a class="link" href="SoupServer.html#soup-server-listen" title="soup_server_listen ()"><code class="function">soup_server_listen</code></a>
-  (to listen on a specific <a href="https://developer.gnome.org/gio/unstable/GSocketAddress.html"><span class="type">GSocketAddress</span></a>), <a class="link" href="SoupServer.html#soup-server-listen-all" title="soup_server_listen_all ()"><code class="function">soup_server_listen_all</code></a>
+  (to listen on a specific <span class="type">GSocketAddress</span>), <a class="link" href="SoupServer.html#soup-server-listen-all" title="soup_server_listen_all ()"><code class="function">soup_server_listen_all</code></a>
   (to listen on a given port on all network interfaces), or <a class="link" href="SoupServer.html#soup-server-listen-local" title="soup_server_listen_local ()"><code class="function">soup_server_listen_local</code></a>
   (to listen to a given port on the loopback interface only). You can
   call any of these functions multiple times, to set up multiple
@@ -110,7 +110,7 @@ a few additional options:
 </p>
 <p>
   The server runs asynchronously, in the thread-default
-  <a href="https://developer.gnome.org/glib/unstable/glib-The-Main-Event-Loop.html#GMainContext"><span class="type">GMainContext</span></a> of the
+  <span class="type">GMainContext</span> of the
   thread in which the "listen" calls were made.
 </p>
 </div>
@@ -157,8 +157,8 @@ to set a callback to handle certain URI paths.
       <tr>
         <td class="listing_lines" align="right"><pre>1
 2</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="function"><a href="SoupServer.html#soup-server-add-handler">soup_server_add_handler</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"/foo"</span><span class="symbol">,</span><span class="normal"> server_callback</span><span class="symbol">,</span>
-<span class="normal">                         data</span><span class="symbol">,</span><span class="normal"> destroy_notify</span><span class="symbol">);</span></pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="function"><a href="SoupServer.html#soup-server-add-handler">soup_server_add_handler</a></span> <span class="gtkdoc opt">(</span>server<span class="gtkdoc opt">,</span> <span class="string">&quot;/foo&quot;</span><span class="gtkdoc opt">,</span> server_callback<span class="gtkdoc opt">,</span>
+                         data<span class="gtkdoc opt">,</span> destroy_notify<span class="gtkdoc opt">);</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -200,16 +200,16 @@ A handler callback looks something like this:
 8
 9
 10</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
-<span class="function">server_callback</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">SoupServer</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">server</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">SoupMessage</span><span class="normal">       </span><span class="symbol">*</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> </span>
-<span class="normal">                 </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">path</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">GHashTable</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">query</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">SoupClientContext</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">client</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">gpointer</span><span class="normal">           user_data</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="symbol">...</span>
-<span class="cbracket">}</span></pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static void</span>
+<span class="function">server_callback</span> <span class="gtkdoc opt">(</span>SoupServer        <span class="gtkdoc opt">*</span>server<span class="gtkdoc opt">,</span>
+                 SoupMessage       <span class="gtkdoc opt">*</span>msg<span class="gtkdoc opt">,</span> 
+                 <span class="gtkdoc kwb">const char</span>        <span class="gtkdoc opt">*</span>path<span class="gtkdoc opt">,</span>
+                 GHashTable        <span class="gtkdoc opt">*</span>query<span class="gtkdoc opt">,</span>
+                 SoupClientContext <span class="gtkdoc opt">*</span>client<span class="gtkdoc opt">,</span>
+                 gpointer           user_data<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+	<span class="gtkdoc opt">...</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -286,37 +286,37 @@ data available at once.
 29
 30
 31</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
-<span class="function">server_callback</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">SoupServer</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">server</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">SoupMessage</span><span class="normal">       </span><span class="symbol">*</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> </span>
-<span class="normal">                 </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">path</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">GHashTable</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">query</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">SoupClientContext</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">client</span><span class="symbol">,</span>
-<span class="normal">                 </span><span class="usertype">gpointer</span><span class="normal">           user_data</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="usertype">MyServerData</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">server_data </span><span class="symbol">=</span><span class="normal"> user_data</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">mime_type</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="usertype">GByteArray</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">body</span><span class="symbol">;</span>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static void</span>
+<span class="function">server_callback</span> <span class="gtkdoc opt">(</span>SoupServer        <span class="gtkdoc opt">*</span>server<span class="gtkdoc opt">,</span>
+                 SoupMessage       <span class="gtkdoc opt">*</span>msg<span class="gtkdoc opt">,</span> 
+                 <span class="gtkdoc kwb">const char</span>        <span class="gtkdoc opt">*</span>path<span class="gtkdoc opt">,</span>
+                 GHashTable        <span class="gtkdoc opt">*</span>query<span class="gtkdoc opt">,</span>
+                 SoupClientContext <span class="gtkdoc opt">*</span>client<span class="gtkdoc opt">,</span>
+                 gpointer           user_data<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+	MyServerData <span class="gtkdoc opt">*</span>server_data <span class="gtkdoc opt">=</span> user_data<span class="gtkdoc opt">;</span>
+	<span class="gtkdoc kwb">const char</span> <span class="gtkdoc opt">*</span>mime_type<span class="gtkdoc opt">;</span>
+	GByteArray <span class="gtkdoc opt">*</span>body<span class="gtkdoc opt">;</span>
 
-<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">-&gt;</span><span class="normal">method </span><span class="symbol">!=</span><span class="normal"> <a href="libsoup-2.4-soup-method.html#SOUP-METHOD-GET:CAPS">SOUP_METHOD_GET</a></span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> <a href="libsoup-2.4-soup-status.html#SOUP-STATUS-NOT-IMPLEMENTED:CAPS">SOUP_STATUS_NOT_IMPLEMENTED</a></span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="cbracket">}</span>
+	<span class="keyword">if</span> <span class="gtkdoc opt">(</span>msg<span class="gtkdoc opt">-&gt;</span>method <span class="gtkdoc opt">!=</span> SOUP_METHOD_GET<span class="gtkdoc opt">) {</span>
+		<span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span> <span class="gtkdoc opt">(</span>msg<span class="gtkdoc opt">,</span> SOUP_STATUS_NOT_IMPLEMENTED<span class="gtkdoc opt">);</span>
+		<span class="keyword">return</span><span class="gtkdoc opt">;</span>
+	<span class="gtkdoc opt">}</span>
 
-<span class="normal">    </span><span class="comment">/* This is somewhat silly. Presumably your server will do</span>
-<span class="comment">     * something more interesting.</span>
-<span class="comment">     */</span>
-<span class="normal">    body </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="https://developer.gnome.org/glib/unstable/glib-Hash-Tables.html#g-hash-table-lookup">g_hash_table_lookup</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server_data</span><span class="symbol">-&gt;</span><span class="normal">bodies</span><span class="symbol">,</span><span class="normal"> path</span><span class="symbol">);</span>
-<span class="normal">    mime_type </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="https://developer.gnome.org/glib/unstable/glib-Hash-Tables.html#g-hash-table-lookup">g_hash_table_lookup</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server_data</span><span class="symbol">-&gt;</span><span class="normal">mime_types</span><span class="symbol">,</span><span class="normal"> path</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">body </span><span class="symbol">||</span><span class="normal"> </span><span class="symbol">!</span><span class="normal">mime_type</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> <a href="libsoup-2.4-soup-status.html#SOUP-STATUS-NOT-FOUND:CAPS">SOUP_STATUS_NOT_FOUND</a></span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="cbracket">}</span>
+	<span class="comment">/* This is somewhat silly. Presumably your server will do</span>
+<span class="comment">	 * something more interesting.</span>
+<span class="comment">	 */</span>
+	body <span class="gtkdoc opt">=</span> <span class="function">g_hash_table_lookup</span> <span class="gtkdoc opt">(</span>server_data<span class="gtkdoc opt">-&gt;</span>bodies<span class="gtkdoc opt">,</span> path<span class="gtkdoc opt">);</span>
+	mime_type <span class="gtkdoc opt">=</span> <span class="function">g_hash_table_lookup</span> <span class="gtkdoc opt">(</span>server_data<span class="gtkdoc opt">-&gt;</span>mime_types<span class="gtkdoc opt">,</span> path<span class="gtkdoc opt">);</span>
+	<span class="keyword">if</span> <span class="gtkdoc opt">(!</span>body <span class="gtkdoc opt">|| !</span>mime_type<span class="gtkdoc opt">) {</span>
+		<span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span> <span class="gtkdoc opt">(</span>msg<span class="gtkdoc opt">,</span> SOUP_STATUS_NOT_FOUND<span class="gtkdoc opt">);</span>
+		<span class="keyword">return</span><span class="gtkdoc opt">;</span>
+	<span class="gtkdoc opt">}</span>
 
-<span class="normal">    </span><span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> <a href="libsoup-2.4-soup-status.html#SOUP-STATUS-OK:CAPS">SOUP_STATUS_OK</a></span><span class="symbol">);</span>
-<span class="normal">    </span><span class="function"><a href="SoupMessage.html#soup-message-set-response">soup_message_set_response</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">msg</span><span class="symbol">,</span><span class="normal"> mime_type</span><span class="symbol">,</span><span class="normal"> <a href="SoupMessageBody.html#SOUP-MEMORY-COPY:CAPS">SOUP_MEMORY_COPY</a></span><span class="symbol">,</span>
-<span class="normal">                               body</span><span class="symbol">-&gt;</span><span class="normal">data</span><span class="symbol">,</span><span class="normal"> body</span><span class="symbol">-&gt;</span><span class="normal">len</span><span class="symbol">);</span>
-<span class="cbracket">}</span></pre></td>
+	<span class="function"><a href="SoupMessage.html#soup-message-set-status">soup_message_set_status</a></span> <span class="gtkdoc opt">(</span>msg<span class="gtkdoc opt">,</span> SOUP_STATUS_OK<span class="gtkdoc opt">);</span>
+	<span class="function"><a href="SoupMessage.html#soup-message-set-response">soup_message_set_response</a></span> <span class="gtkdoc opt">(</span>msg<span class="gtkdoc opt">,</span> mime_type<span class="gtkdoc opt">,</span> SOUP_MEMORY_COPY<span class="gtkdoc opt">,</span>
+	                           body<span class="gtkdoc opt">-&gt;</span>data<span class="gtkdoc opt">,</span> body<span class="gtkdoc opt">-&gt;</span>len<span class="gtkdoc opt">);</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -380,17 +380,17 @@ and pass it to <a class="link" href="SoupServer.html#soup-server-add-auth-domain
 9
 10
 11</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="usertype">SoupAuthDomain</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">domain</span><span class="symbol">;</span>
+        <td class="listing_code"><pre class="programlisting">SoupAuthDomain <span class="gtkdoc opt">*</span>domain<span class="gtkdoc opt">;</span>
 
-<span class="normal">domain </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="SoupAuthDomainBasic.html#soup-auth-domain-basic-new">soup_auth_domain_basic_new</a></span><span class="normal"> </span><span class="symbol">(</span>
-<span class="normal">    <a href="SoupAuthDomain.html#SOUP-AUTH-DOMAIN-REALM:CAPS">SOUP_AUTH_DOMAIN_REALM</a></span><span class="symbol">,</span><span class="normal"> </span><span class="string">"My Realm"</span><span class="symbol">,</span>
-<span class="normal">    <a href="SoupAuthDomainBasic.html#SOUP-AUTH-DOMAIN-BASIC-AUTH-CALLBACK:CAPS">SOUP_AUTH_DOMAIN_BASIC_AUTH_CALLBACK</a></span><span class="symbol">,</span><span class="normal"> auth_callback</span><span class="symbol">,</span>
-<span class="normal">    <a href="SoupAuthDomainBasic.html#SOUP-AUTH-DOMAIN-BASIC-AUTH-DATA:CAPS">SOUP_AUTH_DOMAIN_BASIC_AUTH_DATA</a></span><span class="symbol">,</span><span class="normal"> auth_data</span><span class="symbol">,</span>
-<span class="normal">    <a href="SoupAuthDomain.html#SOUP-AUTH-DOMAIN-ADD-PATH:CAPS">SOUP_AUTH_DOMAIN_ADD_PATH</a></span><span class="symbol">,</span><span class="normal"> </span><span class="string">"/foo"</span><span class="symbol">,</span>
-<span class="normal">    <a href="SoupAuthDomain.html#SOUP-AUTH-DOMAIN-ADD-PATH:CAPS">SOUP_AUTH_DOMAIN_ADD_PATH</a></span><span class="symbol">,</span><span class="normal"> </span><span class="string">"/bar/private"</span><span class="symbol">,</span>
-<span class="normal">    <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
-<span class="function"><a href="SoupServer.html#soup-server-add-auth-domain">soup_server_add_auth_domain</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server</span><span class="symbol">,</span><span class="normal"> domain</span><span class="symbol">);</span>
-<span class="function"><a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">domain</span><span class="symbol">);</span></pre></td>
+domain <span class="gtkdoc opt">=</span> <span class="function"><a href="SoupAuthDomainBasic.html#soup-auth-domain-basic-new">soup_auth_domain_basic_new</a></span> <span class="gtkdoc opt">(</span>
+	SOUP_AUTH_DOMAIN_REALM<span class="gtkdoc opt">,</span> <span class="string">&quot;My Realm&quot;</span><span class="gtkdoc opt">,</span>
+	SOUP_AUTH_DOMAIN_BASIC_AUTH_CALLBACK<span class="gtkdoc opt">,</span> auth_callback<span class="gtkdoc opt">,</span>
+	SOUP_AUTH_DOMAIN_BASIC_AUTH_DATA<span class="gtkdoc opt">,</span> auth_data<span class="gtkdoc opt">,</span>
+	SOUP_AUTH_DOMAIN_ADD_PATH<span class="gtkdoc opt">,</span> <span class="string">&quot;/foo&quot;</span><span class="gtkdoc opt">,</span>
+	SOUP_AUTH_DOMAIN_ADD_PATH<span class="gtkdoc opt">,</span> <span class="string">&quot;/bar/private&quot;</span><span class="gtkdoc opt">,</span>
+	NULL<span class="gtkdoc opt">);</span>
+<span class="function"><a href="SoupServer.html#soup-server-add-auth-domain">soup_server_add_auth_domain</a></span> <span class="gtkdoc opt">(</span>server<span class="gtkdoc opt">,</span> domain<span class="gtkdoc opt">);</span>
+<span class="function">g_object_unref</span> <span class="gtkdoc opt">(</span>domain<span class="gtkdoc opt">);</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -422,23 +422,23 @@ passed to the <code class="literal">server_callback</code>:
 15
 16
 17</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean">gboolean</a></span>
-<span class="function">auth_callback</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">SoupAuthDomain</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">domain</span><span class="symbol">,</span><span class="normal"> </span><span class="usertype">SoupMessage</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">msg</span><span class="symbol">,</span>
-<span class="normal">               </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">username</span><span class="symbol">,</span><span class="normal"> </span><span class="keyword">const</span><span class="normal"> </span><span class="type">char</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">password</span><span class="symbol">,</span>
-<span class="normal">               </span><span class="usertype">gpointer</span><span class="normal"> user_data</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="usertype">MyServerData</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">server_data </span><span class="symbol">=</span><span class="normal"> user_data</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="usertype">MyUserData</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">user</span><span class="symbol">;</span>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static</span> gboolean
+<span class="function">auth_callback</span> <span class="gtkdoc opt">(</span>SoupAuthDomain <span class="gtkdoc opt">*</span>domain<span class="gtkdoc opt">,</span> SoupMessage <span class="gtkdoc opt">*</span>msg<span class="gtkdoc opt">,</span>
+               <span class="gtkdoc kwb">const char</span> <span class="gtkdoc opt">*</span>username<span class="gtkdoc opt">,</span> <span class="gtkdoc kwb">const char</span> <span class="gtkdoc opt">*</span>password<span class="gtkdoc opt">,</span>
+               gpointer user_data<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+	MyServerData <span class="gtkdoc opt">*</span>server_data <span class="gtkdoc opt">=</span> user_data<span class="gtkdoc opt">;</span>
+	MyUserData <span class="gtkdoc opt">*</span>user<span class="gtkdoc opt">;</span>
 
-<span class="normal">    user </span><span class="symbol">=</span><span class="normal"> </span><span class="function">my_server_data_lookup_user</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">server_data</span><span class="symbol">,</span><span class="normal"> username</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">user</span><span class="symbol">)</span>
-<span class="normal">        </span><span class="keyword">return</span><span class="normal"> <a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#FALSE:CAPS">FALSE</a></span><span class="symbol">;</span>
+	user <span class="gtkdoc opt">=</span> <span class="function">my_server_data_lookup_user</span> <span class="gtkdoc opt">(</span>server_data<span class="gtkdoc opt">,</span> username<span class="gtkdoc opt">);</span>
+	<span class="keyword">if</span> <span class="gtkdoc opt">(!</span>user<span class="gtkdoc opt">)</span>
+		<span class="keyword">return</span> FALSE<span class="gtkdoc opt">;</span>
 
-<span class="normal">    </span><span class="comment">/* </span><span class="todo">FIXME:</span><span class="comment"> Don't do this. Keeping a cleartext password database</span>
-<span class="comment">     * is bad.</span>
-<span class="comment">     */</span>
-<span class="normal">    </span><span class="keyword">return</span><span class="normal"> </span><span class="function">strcmp</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">password</span><span class="symbol">,</span><span class="normal"> user</span><span class="symbol">-&gt;</span><span class="normal">password</span><span class="symbol">)</span><span class="normal"> </span><span class="symbol">==</span><span class="normal"> </span><span class="number">0</span><span class="symbol">;</span>
-<span class="cbracket">}</span></pre></td>
+	<span class="comment">/* FIXME: Don&apos;t do this. Keeping a cleartext password database</span>
+<span class="comment">	 * is bad.</span>
+<span class="comment">	 */</span>
+	<span class="keyword">return</span> <span class="function">strcmp</span> <span class="gtkdoc opt">(</span>password<span class="gtkdoc opt">,</span> user<span class="gtkdoc opt">-&gt;</span>password<span class="gtkdoc opt">) ==</span> <span class="number">0</span><span class="gtkdoc opt">;</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -479,6 +479,6 @@ requests), use a <a class="link" href="SoupAuthDomain.html#SoupAuthDomainFilter"
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.24</div>
+<hr>Generated by GTK-Doc V1.28.1</div>
 </body>
 </html>

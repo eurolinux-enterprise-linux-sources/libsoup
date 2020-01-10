@@ -9,12 +9,6 @@
 /* Whether or not apache can be used for tests */
 #undef HAVE_APACHE
 
-/* Apache is 2.2.x */
-#undef HAVE_APACHE_2_2
-
-/* Apache is 2.4.x */
-#undef HAVE_APACHE_2_4
-
 /* Whether or not curl can be used for tests */
 #undef HAVE_CURL
 

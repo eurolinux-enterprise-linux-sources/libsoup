@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>SoupAuthManager: libsoup Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch03.html" title="Additional Features">
 <link rel="prev" href="SoupSessionFeature.html" title="SoupSessionFeature">
 <link rel="next" href="SoupContentDecoder.html" title="SoupContentDecoder">
-<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.28.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -36,16 +36,12 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="SoupAuthManager.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
 </colgroup>
 <tbody>
-<tr>
-<td class="define_keyword">#define</td>
-<td class="function_name"><a class="link" href="SoupAuthManager.html#SOUP-TYPE-AUTH-MANAGER:CAPS" title="SOUP_TYPE_AUTH_MANAGER">SOUP_TYPE_AUTH_MANAGER</a></td>
-</tr>
 <tr>
 <td class="function_type">
 <span class="returnvalue">void</span>
@@ -54,12 +50,20 @@
 <a class="link" href="SoupAuthManager.html#soup-auth-manager-use-auth" title="soup_auth_manager_use_auth ()">soup_auth_manager_use_auth</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="SoupAuthManager.html#soup-auth-manager-clear-cached-credentials" title="soup_auth_manager_clear_cached_credentials ()">soup_auth_manager_clear_cached_credentials</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
 </tbody>
 </table></div>
 </div>
 <div class="refsect1">
 <a name="SoupAuthManager.signals"></a><h2>Signals</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="signals_return">
 <col width="300px" class="signals_name">
@@ -74,20 +78,26 @@
 </div>
 <div class="refsect1">
 <a name="SoupAuthManager.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
 </colgroup>
-<tbody><tr>
+<tbody>
+<tr>
 <td class="datatype_keyword"> </td>
 <td class="function_name"><a class="link" href="SoupAuthManager.html#SoupAuthManager-struct" title="SoupAuthManager">SoupAuthManager</a></td>
-</tr></tbody>
+</tr>
+<tr>
+<td class="define_keyword">#define</td>
+<td class="function_name"><a class="link" href="SoupAuthManager.html#SOUP-TYPE-AUTH-MANAGER:CAPS" title="SOUP_TYPE_AUTH_MANAGER">SOUP_TYPE_AUTH_MANAGER</a></td>
+</tr>
+</tbody>
 </table></div>
 </div>
 <div class="refsect1">
 <a name="SoupAuthManager.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> SoupAuthManager
 </pre>
 </div>
@@ -115,20 +125,6 @@ individual requests with <a class="link" href="SoupMessage.html#soup-message-dis
 <div class="refsect1">
 <a name="SoupAuthManager.functions_details"></a><h2>Functions</h2>
 <div class="refsect2">
-<a name="SOUP-TYPE-AUTH-MANAGER:CAPS"></a><h3>SOUP_TYPE_AUTH_MANAGER</h3>
-<pre class="programlisting">#define SOUP_TYPE_AUTH_MANAGER            (soup_auth_manager_get_type ())
-</pre>
-<p>The <a href="https://developer.gnome.org/gobject/unstable/gobject-Type-Information.html#GType"><span class="type">GType</span></a> of <a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a>; you can use this with
-<a class="link" href="SoupSession.html#soup-session-remove-feature-by-type" title="soup_session_remove_feature_by_type ()"><code class="function">soup_session_remove_feature_by_type()</code></a> or
-<a class="link" href="SoupMessage.html#soup-message-disable-feature" title="soup_message_disable_feature ()"><code class="function">soup_message_disable_feature()</code></a>.</p>
-<p>(Although this type has only been publicly visible since libsoup
-2.42, it has always existed in the background, and you can use
-<code class="literal"><code class="code">g_type_from_name ("SoupAuthManager")</code></code>
-to get its <a href="https://developer.gnome.org/gobject/unstable/gobject-Type-Information.html#GType"><span class="type">GType</span></a> in earlier releases.)</p>
-<p class="since">Since: 2.42</p>
-</div>
-<hr>
-<div class="refsect2">
 <a name="soup-auth-manager-use-auth"></a><h3>soup_auth_manager_use_auth ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_auth_manager_use_auth (<em class="parameter"><code><a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a> *manager</code></em>,
@@ -146,8 +142,8 @@ response will be returned.</p>
 Authorization header does not depend on any additional information
 from the server. (Eg, Basic or NTLM, but not Digest.)</p>
 <div class="refsect3">
-<a name="id-1.4.3.10.3.6"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-auth-manager-use-auth.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -175,12 +171,51 @@ is to be used</p></td>
 </div>
 <p class="since">Since: 2.42</p>
 </div>
+<hr>
+<div class="refsect2">
+<a name="soup-auth-manager-clear-cached-credentials"></a><h3>soup_auth_manager_clear_cached_credentials ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+soup_auth_manager_clear_cached_credentials
+                               (<em class="parameter"><code><a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a> *manager</code></em>);</pre>
+<p>Clear all credentials cached by <em class="parameter"><code>manager</code></em>
+</p>
+<div class="refsect3">
+<a name="soup-auth-manager-clear-cached-credentials.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>manager</p></td>
+<td class="parameter_description"><p>a <a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<p class="since">Since: 2.58</p>
+</div>
 </div>
 <div class="refsect1">
 <a name="SoupAuthManager.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
 <a name="SoupAuthManager-struct"></a><h3>SoupAuthManager</h3>
 <pre class="programlisting">typedef struct _SoupAuthManager SoupAuthManager;</pre>
+</div>
+<hr>
+<div class="refsect2">
+<a name="SOUP-TYPE-AUTH-MANAGER:CAPS"></a><h3>SOUP_TYPE_AUTH_MANAGER</h3>
+<pre class="programlisting">#define SOUP_TYPE_AUTH_MANAGER            (soup_auth_manager_get_type ())
+</pre>
+<p>The <span class="type">GType</span> of <a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a>; you can use this with
+<a class="link" href="SoupSession.html#soup-session-remove-feature-by-type" title="soup_session_remove_feature_by_type ()"><code class="function">soup_session_remove_feature_by_type()</code></a> or
+<a class="link" href="SoupMessage.html#soup-message-disable-feature" title="soup_message_disable_feature ()"><code class="function">soup_message_disable_feature()</code></a>.</p>
+<p>(Although this type has only been publicly visible since libsoup
+2.42, it has always existed in the background, and you can use
+<code class="literal"><code class="code">g_type_from_name ("SoupAuthManager")</code></code>
+to get its <span class="type">GType</span> in earlier releases.)</p>
+<p class="since">Since: 2.42</p>
 </div>
 </div>
 <div class="refsect1">
@@ -191,16 +226,16 @@ is to be used</p></td>
 user_function (<a class="link" href="SoupAuthManager.html" title="SoupAuthManager"><span class="type">SoupAuthManager</span></a> *manager,
                <a class="link" href="SoupMessage.html" title="SoupMessage"><span class="type">SoupMessage</span></a>     *msg,
                <a class="link" href="SoupAuth.html" title="SoupAuth"><span class="type">SoupAuth</span></a>        *auth,
-               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>         retrying,
-               <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>         user_data)</pre>
+               <span class="type">gboolean</span>         retrying,
+               <span class="type">gpointer</span>         user_data)</pre>
 <p>Emitted when the manager requires the application to
 provide authentication credentials.</p>
 <p><a class="link" href="SoupSession.html" title="SoupSession"><span class="type">SoupSession</span></a> connects to this signal and emits its own
 <a class="link" href="SoupSession.html#SoupSession-authenticate" title="The “authenticate” signal"><span class="type">“authenticate”</span></a> signal when it is emitted, so
 you shouldn't need to use this signal directly.</p>
 <div class="refsect3">
-<a name="id-1.4.3.12.2.6"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="SoupAuthManager-authenticate.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -224,7 +259,7 @@ you shouldn't need to use this signal directly.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>retrying</p></td>
-<td class="parameter_description"><p><a href="https://developer.gnome.org/glib/unstable/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if this is the second (or later) attempt</p></td>
+<td class="parameter_description"><p><code class="literal">TRUE</code> if this is the second (or later) attempt</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -244,6 +279,6 @@ you shouldn't need to use this signal directly.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.24</div>
+<hr>Generated by GTK-Doc V1.28.1</div>
 </body>
 </html>

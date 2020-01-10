@@ -1169,10 +1169,10 @@ soup_message_headers_set_range (SoupMessageHeaders  *hdrs,
 /**
  * soup_message_headers_get_content_range:
  * @hdrs: a #SoupMessageHeaders
- * @start: return value for the start of the range
- * @end: return value for the end of the range
- * @total_length: return value for the total length of the resource,
- * or %NULL if you don't care.
+ * @start: (out): return value for the start of the range
+ * @end: (out): return value for the end of the range
+ * @total_length: (out) (optional): return value for the total length of the
+ * resource, or %NULL if you don't care.
  *
  * Parses @hdrs's Content-Range header and returns it in @start,
  * @end, and @total_length. If the total length field in the header

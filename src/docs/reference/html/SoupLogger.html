@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>SoupLogger: libsoup Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="libsoup Reference Manual">
 <link rel="up" href="ch03.html" title="Additional Features">
 <link rel="prev" href="SoupCookieJarDB.html" title="SoupCookieJarDB">
 <link rel="next" href="SoupProxyResolverDefault.html" title="SoupProxyResolverDefault">
-<meta name="generator" content="GTK-Doc V1.24 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.28.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -36,7 +36,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="SoupLogger.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -95,7 +95,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupLogger.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -108,7 +108,7 @@
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></td>
+<td class="property_type"><span class="type">gint</span></td>
 <td class="property_name"><a class="link" href="SoupLogger.html#SoupLogger--max-body-size" title="The “max-body-size” property">max-body-size</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
@@ -117,7 +117,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupLogger.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -136,7 +136,7 @@
 </div>
 <div class="refsect1">
 <a name="SoupLogger.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="https://developer.gnome.org/gobject/unstable/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    GObject
     <span class="lineart">╰──</span> SoupLogger
 </pre>
 </div>
@@ -171,9 +171,9 @@ and then attach it to a session (or multiple sessions) with
 &gt; Host: localhost
 &gt; Content-Type: text/plain
 &gt; Connection: close
-&gt; 
+&gt;
 &gt; This is a test.
-  
+
 &lt; HTTP/1.1 201 Created
 &lt; Soup-Debug-Timestamp: 1200171744
 &lt; Soup-Debug: SoupMessage 1 (0x617000)
@@ -225,8 +225,8 @@ bytes of the body that will be logged. (-1 means "no limit".)</p>
 logged, use <a class="link" href="SoupLogger.html#soup-logger-set-request-filter" title="soup_logger_set_request_filter ()"><code class="function">soup_logger_set_request_filter()</code></a> and
 <a class="link" href="SoupLogger.html#soup-logger-set-response-filter" title="soup_logger_set_response_filter ()"><code class="function">soup_logger_set_response_filter()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.4.9.10.2.6"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-logger-new.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -247,7 +247,7 @@ logged, use <a class="link" href="SoupLogger.html#soup-logger-set-request-filter
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.4.9.10.2.7"></a><h4>Returns</h4>
+<a name="soup-logger-new.returns"></a><h4>Returns</h4>
 <p> a new <a class="link" href="SoupLogger.html" title="SoupLogger"><span class="type">SoupLogger</span></a></p>
 </div>
 </div>
@@ -257,15 +257,15 @@ logged, use <a class="link" href="SoupLogger.html#soup-logger-set-request-filter
 <pre class="programlisting"><a class="link" href="SoupLogger.html#SoupLoggerLogLevel" title="enum SoupLoggerLogLevel"><span class="returnvalue">SoupLoggerLogLevel</span></a>
 <span class="c_punctuation">(</span>*SoupLoggerFilter<span class="c_punctuation">)</span> (<em class="parameter"><code><a class="link" href="SoupLogger.html" title="SoupLogger"><span class="type">SoupLogger</span></a> *logger</code></em>,
                      <em class="parameter"><code><a class="link" href="SoupMessage.html" title="SoupMessage"><span class="type">SoupMessage</span></a> *msg</code></em>,
-                     <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
+                     <em class="parameter"><code><span class="type">gpointer</span> user_data</code></em>);</pre>
 <p>The prototype for a logging filter. The filter callback will be
 invoked for each request or response, and should analyze it and
 return a <a class="link" href="SoupLogger.html#SoupLoggerLogLevel" title="enum SoupLoggerLogLevel"><span class="type">SoupLoggerLogLevel</span></a> value indicating how much of the
 message to log. Eg, it might choose between <a class="link" href="SoupLogger.html#SOUP-LOGGER-LOG-BODY:CAPS"><code class="literal">SOUP_LOGGER_LOG_BODY</code></a>
 and <a class="link" href="SoupLogger.html#SOUP-LOGGER-LOG-HEADERS:CAPS"><code class="literal">SOUP_LOGGER_LOG_HEADERS</code></a> depending on the Content-Type.</p>
 <div class="refsect3">
-<a name="id-1.4.9.10.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="SoupLoggerFilter.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -292,7 +292,7 @@ or <a class="link" href="SoupLogger.html#soup-logger-set-response-filter" title=
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.4.9.10.3.6"></a><h4>Returns</h4>
+<a name="SoupLoggerFilter.returns"></a><h4>Returns</h4>
 <p> a <a class="link" href="SoupLogger.html#SoupLoggerLogLevel" title="enum SoupLoggerLogLevel"><span class="type">SoupLoggerLogLevel</span></a> value indicating how much of
 the message to log</p>
 </div>
@@ -303,8 +303,8 @@ the message to log</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_logger_set_request_filter (<em class="parameter"><code><a class="link" href="SoupLogger.html" title="SoupLogger"><span class="type">SoupLogger</span></a> *logger</code></em>,
                                 <em class="parameter"><code><a class="link" href="SoupLogger.html#SoupLoggerFilter" title="SoupLoggerFilter ()"><span class="type">SoupLoggerFilter</span></a> request_filter</code></em>,
-                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> filter_data</code></em>,
-                                <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Datasets.html#GDestroyNotify"><span class="type">GDestroyNotify</span></a> destroy</code></em>);</pre>
+                                <em class="parameter"><code><span class="type">gpointer</span> filter_data</code></em>,
+                                <em class="parameter"><code><span class="type">GDestroyNotify</span> destroy</code></em>);</pre>
 <p>Sets up a filter to determine the log level for a given request.
 For each HTTP request <em class="parameter"><code>logger</code></em>
  will invoke <em class="parameter"><code>request_filter</code></em>
@@ -314,8 +314,8 @@ set a request filter, <em class="parameter"><code>logger</code></em>
  will just always log requests at the
 level passed to <a class="link" href="SoupLogger.html#soup-logger-new" title="soup_logger_new ()"><code class="function">soup_logger_new()</code></a>.)</p>
 <div class="refsect3">
-<a name="id-1.4.9.10.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-logger-set-request-filter.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -339,7 +339,7 @@ level passed to <a class="link" href="SoupLogger.html#soup-logger-new" title="so
 </tr>
 <tr>
 <td class="parameter_name"><p>destroy</p></td>
-<td class="parameter_description"><p>a <a href="https://developer.gnome.org/glib/unstable/glib-Datasets.html#GDestroyNotify"><span class="type">GDestroyNotify</span></a> to free <em class="parameter"><code>filter_data</code></em>
+<td class="parameter_description"><p>a <span class="type">GDestroyNotify</span> to free <em class="parameter"><code>filter_data</code></em>
 </p></td>
 <td class="parameter_annotations"> </td>
 </tr>
@@ -353,8 +353,8 @@ level passed to <a class="link" href="SoupLogger.html#soup-logger-new" title="so
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_logger_set_response_filter (<em class="parameter"><code><a class="link" href="SoupLogger.html" title="SoupLogger"><span class="type">SoupLogger</span></a> *logger</code></em>,
                                  <em class="parameter"><code><a class="link" href="SoupLogger.html#SoupLoggerFilter" title="SoupLoggerFilter ()"><span class="type">SoupLoggerFilter</span></a> response_filter</code></em>,
-                                 <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> filter_data</code></em>,
-                                 <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Datasets.html#GDestroyNotify"><span class="type">GDestroyNotify</span></a> destroy</code></em>);</pre>
+                                 <em class="parameter"><code><span class="type">gpointer</span> filter_data</code></em>,
+                                 <em class="parameter"><code><span class="type">GDestroyNotify</span> destroy</code></em>);</pre>
 <p>Sets up a filter to determine the log level for a given response.
 For each HTTP response <em class="parameter"><code>logger</code></em>
  will invoke <em class="parameter"><code>response_filter</code></em>
@@ -364,8 +364,8 @@ set a response filter, <em class="parameter"><code>logger</code></em>
  will just always log responses at
 the level passed to <a class="link" href="SoupLogger.html#soup-logger-new" title="soup_logger_new ()"><code class="function">soup_logger_new()</code></a>.)</p>
 <div class="refsect3">
-<a name="id-1.4.9.10.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-logger-set-response-filter.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -389,7 +389,7 @@ the level passed to <a class="link" href="SoupLogger.html#soup-logger-new" title
 </tr>
 <tr>
 <td class="parameter_name"><p>destroy</p></td>
-<td class="parameter_description"><p>a <a href="https://developer.gnome.org/glib/unstable/glib-Datasets.html#GDestroyNotify"><span class="type">GDestroyNotify</span></a> to free <em class="parameter"><code>filter_data</code></em>
+<td class="parameter_description"><p>a <span class="type">GDestroyNotify</span> to free <em class="parameter"><code>filter_data</code></em>
 </p></td>
 <td class="parameter_annotations"> </td>
 </tr>
@@ -405,7 +405,7 @@ the level passed to <a class="link" href="SoupLogger.html#soup-logger-new" title
                       <em class="parameter"><code><a class="link" href="SoupLogger.html#SoupLoggerLogLevel" title="enum SoupLoggerLogLevel"><span class="type">SoupLoggerLogLevel</span></a> level</code></em>,
                       <em class="parameter"><code><span class="type">char</span> direction</code></em>,
                       <em class="parameter"><code>const <span class="type">char</span> *data</code></em>,
-                      <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
+                      <em class="parameter"><code><span class="type">gpointer</span> user_data</code></em>);</pre>
 <p>The prototype for a custom printing callback.</p>
 <p><em class="parameter"><code>level</code></em>
  indicates what kind of information is being printed. Eg, it
@@ -421,15 +421,15 @@ to print; the printer is expected to add a terminating newline.</p>
     <tbody>
       <tr>
         <td class="listing_lines" align="right"><pre>1</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="function">printf</span><span class="normal"> </span><span class="symbol">(</span><span class="string">"%c %s</span><span class="specialchar">\n</span><span class="string">"</span><span class="symbol">,</span><span class="normal"> direction</span><span class="symbol">,</span><span class="normal"> data</span><span class="symbol">);</span></pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="function">printf</span> <span class="gtkdoc opt">(</span><span class="string">&quot;%c %s</span><span class="gtkdoc esc">\n</span><span class="string">&quot;</span><span class="gtkdoc opt">,</span> direction<span class="gtkdoc opt">,</span> data<span class="gtkdoc opt">);</span></pre></td>
       </tr>
     </tbody>
   </table>
 </div>
 
 <div class="refsect3">
-<a name="id-1.4.9.10.6.9"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="SoupLoggerPrinter.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -472,13 +472,13 @@ to print; the printer is expected to add a terminating newline.</p>
 <pre class="programlisting"><span class="returnvalue">void</span>
 soup_logger_set_printer (<em class="parameter"><code><a class="link" href="SoupLogger.html" title="SoupLogger"><span class="type">SoupLogger</span></a> *logger</code></em>,
                          <em class="parameter"><code><a class="link" href="SoupLogger.html#SoupLoggerPrinter" title="SoupLoggerPrinter ()"><span class="type">SoupLoggerPrinter</span></a> printer</code></em>,
-                         <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> printer_data</code></em>,
-                         <em class="parameter"><code><a href="https://developer.gnome.org/glib/unstable/glib-Datasets.html#GDestroyNotify"><span class="type">GDestroyNotify</span></a> destroy</code></em>);</pre>
+                         <em class="parameter"><code><span class="type">gpointer</span> printer_data</code></em>,
+                         <em class="parameter"><code><span class="type">GDestroyNotify</span> destroy</code></em>);</pre>
 <p>Sets up an alternate log printing routine, if you don't want
 the log to go to <code class="literal">stdout</code>.</p>
 <div class="refsect3">
-<a name="id-1.4.9.10.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="soup-logger-set-printer.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -502,7 +502,7 @@ the log to go to <code class="literal">stdout</code>.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>destroy</p></td>
-<td class="parameter_description"><p>a <a href="https://developer.gnome.org/glib/unstable/glib-Datasets.html#GDestroyNotify"><span class="type">GDestroyNotify</span></a> to free <em class="parameter"><code>printer_data</code></em>
+<td class="parameter_description"><p>a <span class="type">GDestroyNotify</span> to free <em class="parameter"><code>printer_data</code></em>
 </p></td>
 <td class="parameter_annotations"> </td>
 </tr>
@@ -522,8 +522,8 @@ the log to go to <code class="literal">stdout</code>.</p>
 <a name="SoupLoggerLogLevel"></a><h3>enum SoupLoggerLogLevel</h3>
 <p>Describes the level of logging output to provide.</p>
 <div class="refsect3">
-<a name="id-1.4.9.11.3.4"></a><h4>Members</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="SoupLoggerLogLevel.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
 <col class="enum_members_description">
@@ -578,7 +578,7 @@ bodies.</p>
 <hr>
 <div class="refsect2">
 <a name="SoupLogger--max-body-size"></a><h3>The <code class="literal">“max-body-size”</code> property</h3>
-<pre class="programlisting">  “max-body-size”            <a href="https://developer.gnome.org/glib/unstable/glib-Basic-Types.html#gint"><span class="type">gint</span></a></pre>
+<pre class="programlisting">  “max-body-size”            <span class="type">gint</span></pre>
 <p>If <a class="link" href="SoupLogger.html#SoupLogger--level" title="The “level” property"><span class="type">“level”</span></a> is <a class="link" href="SoupLogger.html#SOUP-LOGGER-LOG-BODY:CAPS"><code class="literal">SOUP_LOGGER_LOG_BODY</code></a>, this gives
 the maximum number of bytes of the body that will be logged.
 (-1 means "no limit".)</p>
@@ -590,6 +590,6 @@ the maximum number of bytes of the body that will be logged.
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.24</div>
+<hr>Generated by GTK-Doc V1.28.1</div>
 </body>
 </html>

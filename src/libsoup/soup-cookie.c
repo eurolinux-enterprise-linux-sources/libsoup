@@ -598,10 +598,11 @@ soup_cookie_set_max_age (SoupCookie *cookie, int max_age)
  * soup_cookie_get_expires:
  * @cookie: a #SoupCookie
  *
- * Gets @cookie's expiration time
+ * Gets @cookie's expiration time.
  *
- * Return value: (transfer none): @cookie's expiration time, which is
- * owned by @cookie and should not be modified or freed.
+ * Return value: (nullable) (transfer none): @cookie's expiration
+ * time, which is owned by @cookie and should not be modified or
+ * freed.
  *
  * Since: 2.32
  **/
@@ -1012,7 +1013,7 @@ soup_cookie_applies_to_uri (SoupCookie *cookie, SoupURI *uri)
 {
 	int plen;
 
-	if (cookie->secure && uri->scheme != SOUP_URI_SCHEME_HTTPS)
+	if (cookie->secure && !soup_uri_is_https (uri, NULL))
 		return FALSE;
 
 	if (cookie->expires && soup_date_is_past (cookie->expires))

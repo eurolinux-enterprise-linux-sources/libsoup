@@ -414,13 +414,18 @@ digest_nonce_unauthorized (SoupMessage *msg, gpointer data)
 
 static void
 do_digest_nonce_test (SoupSession *session,
-		      const char *nth, const char *uri,
+		      const char *nth, const char *uri, gboolean use_auth_cache,
 		      gboolean expect_401, gboolean expect_signal)
 {
 	SoupMessage *msg;
 	gboolean got_401;
 
 	msg = soup_message_new (SOUP_METHOD_GET, uri);
+	if (!use_auth_cache) {
+		SoupMessageFlags flags = soup_message_get_flags (msg);
+
+		soup_message_set_flags (msg, flags | SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE);
+	}
 	if (expect_signal) {
 		g_signal_connect (session, "authenticate",
 				  G_CALLBACK (digest_nonce_authenticate),
@@ -437,6 +442,12 @@ do_digest_nonce_test (SoupSession *session,
 			  got_401 ? "got" : "did not get");
 	soup_test_assert_message_status (msg, SOUP_STATUS_OK);
 
+	if (expect_signal) {
+		g_signal_handlers_disconnect_by_func (session,
+						      G_CALLBACK (digest_nonce_authenticate),
+						      NULL);
+	}
+
 	g_object_unref (msg);
 }
 
@@ -451,15 +462,15 @@ do_digest_expiration_test (void)
 	session = soup_test_session_new (SOUP_TYPE_SESSION_ASYNC, NULL);
 
 	uri = g_strconcat (base_uri, "Digest/realm1/", NULL);
-	do_digest_nonce_test (session, "First", uri, TRUE, TRUE);
+	do_digest_nonce_test (session, "First", uri, TRUE, TRUE, TRUE);
 	g_free (uri);
 	sleep (2);
 	uri = g_strconcat (base_uri, "Digest/realm1/expire/", NULL);
-	do_digest_nonce_test (session, "Second", uri, TRUE, FALSE);
+	do_digest_nonce_test (session, "Second", uri, TRUE, TRUE, FALSE);
 	sleep (1);
-	do_digest_nonce_test (session, "Third", uri, FALSE, FALSE);
+	do_digest_nonce_test (session, "Third", uri, TRUE, FALSE, FALSE);
 	sleep (1);
-	do_digest_nonce_test (session, "Fourth", uri, FALSE, FALSE);
+	do_digest_nonce_test (session, "Fourth", uri, TRUE, FALSE, FALSE);
 	g_free (uri);
 
 	soup_test_session_abort_unref (session);
@@ -1121,7 +1132,8 @@ do_disappearing_auth_test (void)
 	SoupSession *session;
 	int counter;
 
-	g_test_bug ("https://bugzilla.redhat.com/show_bug.cgi?id=916224");
+	g_test_bug_base ("https://bugzilla.redhat.com/");
+	g_test_bug ("916224");
 
 	server = soup_test_server_new (FALSE);
 	soup_server_add_handler (server, NULL,
@@ -1264,6 +1276,220 @@ do_batch_tests (gconstpointer data)
 	soup_test_session_abort_unref (session);
 }
 
+static void
+do_clear_credentials_test (void)
+{
+	SoupSession *session;
+	SoupAuthManager *manager;
+	char *uri;
+
+	SOUP_TEST_SKIP_IF_NO_APACHE;
+
+	session = soup_test_session_new (SOUP_TYPE_SESSION, NULL);
+
+	uri = g_strconcat (base_uri, "Digest/realm1/", NULL);
+	do_digest_nonce_test (session, "First", uri, TRUE, TRUE, TRUE);
+
+	manager = SOUP_AUTH_MANAGER (soup_session_get_feature (session, SOUP_TYPE_AUTH_MANAGER));
+	soup_auth_manager_clear_cached_credentials (manager);
+
+	do_digest_nonce_test (session, "Second", uri, TRUE, TRUE, TRUE);
+	g_free (uri);
+
+	soup_test_session_abort_unref (session);
+}
+
+static void
+do_message_do_not_use_auth_cache_test (void)
+{
+	SoupSession *session;
+	SoupAuthManager *manager;
+	SoupMessage *msg;
+	SoupMessageFlags flags;
+	SoupURI *soup_uri;
+	char *uri;
+
+	SOUP_TEST_SKIP_IF_NO_APACHE;
+
+	session = soup_test_session_new (SOUP_TYPE_SESSION, NULL);
+
+	uri = g_strconcat (base_uri, "Digest/realm1/", NULL);
+
+	/* First check that cached credentials are not used */
+	do_digest_nonce_test (session, "First", uri, TRUE, TRUE, TRUE);
+	do_digest_nonce_test (session, "Second", uri, TRUE, FALSE, FALSE);
+	do_digest_nonce_test (session, "Third", uri, FALSE, TRUE, TRUE);
+
+	/* Passing credentials in the URI should always authenticate
+	 * no matter whether the cache is used or not
+	 */
+	soup_uri = soup_uri_new (uri);
+	soup_uri_set_user (soup_uri, "user1");
+	soup_uri_set_password (soup_uri, "realm1");
+	msg = soup_message_new_from_uri (SOUP_METHOD_GET, soup_uri);
+	flags = soup_message_get_flags (msg);
+	soup_message_set_flags (msg, flags | SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE);
+	soup_session_send_message (session, msg);
+	soup_test_assert_message_status (msg, SOUP_STATUS_OK);
+	g_object_unref (msg);
+	soup_uri_free (soup_uri);
+
+	manager = SOUP_AUTH_MANAGER (soup_session_get_feature (session, SOUP_TYPE_AUTH_MANAGER));
+
+	soup_auth_manager_clear_cached_credentials (manager);
+
+	/* Now check that credentials are not stored */
+	do_digest_nonce_test (session, "First", uri, FALSE, TRUE, TRUE);
+	do_digest_nonce_test (session, "Second", uri, TRUE, TRUE, TRUE);
+	do_digest_nonce_test (session, "Third", uri, TRUE, FALSE, FALSE);
+
+	/* Credentials were stored for uri, but if we set SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE flag,
+	 * and we don't have the authenticate signal, it should respond with 401
+	 */
+	msg = soup_message_new (SOUP_METHOD_GET, uri);
+	flags = soup_message_get_flags (msg);
+	soup_message_set_flags (msg, flags | SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE);
+	soup_session_send_message (session, msg);
+	soup_test_assert_message_status (msg, SOUP_STATUS_UNAUTHORIZED);
+	g_object_unref (msg);
+	g_free (uri);
+
+	soup_test_session_abort_unref (session);
+}
+
+static void
+async_no_auth_cache_authenticate (SoupSession *session, SoupMessage *msg,
+				  SoupAuth *auth, gboolean retrying, SoupAuth **auth_out)
+{
+	debug_printf (1, "  async_no_auth_cache_authenticate\n");
+
+	soup_session_pause_message (session, msg);
+	*auth_out = g_object_ref (auth);
+	g_main_loop_quit (loop);
+}
+
+static void
+async_no_auth_cache_finished (SoupSession *session, SoupMessage *msg, gpointer user_data)
+{
+	debug_printf (1, "  async_no_auth_cache_finished\n");
+
+	g_main_loop_quit (loop);
+}
+
+static void
+do_async_message_do_not_use_auth_cache_test (void)
+{
+	SoupSession *session;
+	SoupMessage *msg;
+	char *uri;
+	SoupAuth *auth = NULL;
+	SoupMessageFlags flags;
+
+	SOUP_TEST_SKIP_IF_NO_APACHE;
+
+	loop = g_main_loop_new (NULL, TRUE);
+	session = soup_test_session_new (SOUP_TYPE_SESSION_ASYNC, NULL);
+	uri = g_strconcat (base_uri, "Basic/realm1/", NULL);
+
+	msg = soup_message_new ("GET", uri);
+	g_free (uri);
+	g_signal_connect (session, "authenticate",
+			  G_CALLBACK (async_no_auth_cache_authenticate), &auth);
+	flags = soup_message_get_flags (msg);
+	soup_message_set_flags (msg, flags | SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE);
+	g_object_ref (msg);
+	soup_session_queue_message (session, msg, async_no_auth_cache_finished, NULL);
+	g_main_loop_run (loop);
+
+	soup_test_assert_message_status (msg, SOUP_STATUS_UNAUTHORIZED);
+
+	soup_test_assert (auth, "msg didn't get authenticate signal");
+	soup_auth_authenticate (auth, "user1", "realm1");
+	g_object_unref (auth);
+
+	soup_session_unpause_message (session, msg);
+	g_main_loop_run (loop);
+
+	soup_test_assert_message_status (msg, SOUP_STATUS_OK);
+
+	soup_test_session_abort_unref (session);
+	g_object_unref (msg);
+	g_main_loop_unref (loop);
+}
+
+static void
+has_authorization_header_authenticate (SoupSession *session, SoupMessage *msg,
+				       SoupAuth *auth, gboolean retrying, gpointer data)
+{
+	SoupAuth **saved_auth = data;
+
+	soup_auth_authenticate (auth, "user1", "realm1");
+	*saved_auth = g_object_ref (auth);
+}
+
+static void
+has_authorization_header_authenticate_assert (SoupSession *session, SoupMessage *msg,
+					      SoupAuth *auth, gboolean retrying, gpointer data)
+{
+	soup_test_assert (FALSE, "authenticate emitted unexpectedly");
+}
+
+static void
+do_message_has_authorization_header_test (void)
+{
+	SoupSession *session;
+	SoupMessage *msg;
+	SoupAuthManager *manager;
+	SoupAuth *auth = NULL;
+	char *token;
+	guint auth_id;
+	char *uri;
+
+	g_test_bug ("775882");
+
+	SOUP_TEST_SKIP_IF_NO_APACHE;
+
+	session = soup_test_session_new (SOUP_TYPE_SESSION, NULL);
+	uri = g_strconcat (base_uri, "Digest/realm1/", NULL);
+
+	msg = soup_message_new ("GET", uri);
+	auth_id = g_signal_connect (session, "authenticate",
+			  G_CALLBACK (has_authorization_header_authenticate), &auth);
+	soup_session_send_message (session, msg);
+	soup_test_assert_message_status (msg, SOUP_STATUS_OK);
+	soup_test_assert (SOUP_IS_AUTH (auth), "Expected a SoupAuth");
+	token = soup_auth_get_authorization (auth, msg);
+	g_object_unref (auth);
+	g_object_unref (msg);
+	g_signal_handler_disconnect (session, auth_id);
+
+	manager = SOUP_AUTH_MANAGER (soup_session_get_feature (session, SOUP_TYPE_AUTH_MANAGER));
+	soup_auth_manager_clear_cached_credentials (manager);
+
+	msg = soup_message_new ("GET", uri);
+	soup_message_headers_replace (msg->request_headers, "Authorization", token);
+	auth_id = g_signal_connect (session, "authenticate",
+				    G_CALLBACK (has_authorization_header_authenticate_assert),
+				    NULL);
+	soup_session_send_message (session, msg);
+	soup_test_assert_message_status (msg, SOUP_STATUS_OK);
+	g_object_unref (msg);
+
+	/* Check that we can also provide our own Authorization header when not using credentials cache. */
+	soup_auth_manager_clear_cached_credentials (manager);
+	msg = soup_message_new ("GET", uri);
+	soup_message_headers_replace (msg->request_headers, "Authorization", token);
+	soup_message_set_flags (msg, soup_message_get_flags (msg) | SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE);
+	soup_session_send_message (session, msg);
+	soup_test_assert_message_status (msg, SOUP_STATUS_OK);
+	g_object_unref (msg);
+	g_free (token);
+	g_signal_handler_disconnect (session, auth_id);
+
+	g_free (uri);
+	soup_test_session_abort_unref (session);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -1286,6 +1512,10 @@ main (int argc, char **argv)
 	g_test_add_func ("/auth/auth-close", do_auth_close_test);
 	g_test_add_func ("/auth/infinite-auth", do_infinite_auth_test);
 	g_test_add_func ("/auth/disappearing-auth", do_disappearing_auth_test);
+	g_test_add_func ("/auth/clear-credentials", do_clear_credentials_test);
+	g_test_add_func ("/auth/message-do-not-use-auth-cache", do_message_do_not_use_auth_cache_test);
+	g_test_add_func ("/auth/async-message-do-not-use-auth-cache", do_async_message_do_not_use_auth_cache_test);
+	g_test_add_func ("/auth/authorization-header-request", do_message_has_authorization_header_test);
 
 	ret = g_test_run ();
 

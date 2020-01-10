@@ -62,10 +62,6 @@
   <functions>
     <keyword type="function" name="soup_auth_new ()" link="SoupAuth.html#soup-auth-new"/>
     <keyword type="function" name="soup_auth_update ()" link="SoupAuth.html#soup-auth-update"/>
-    <keyword type="macro" name="SOUP_TYPE_AUTH_BASIC" link="SoupAuth.html#SOUP-TYPE-AUTH-BASIC:CAPS" since="2.34"/>
-    <keyword type="macro" name="SOUP_TYPE_AUTH_DIGEST" link="SoupAuth.html#SOUP-TYPE-AUTH-DIGEST:CAPS" since="2.34"/>
-    <keyword type="macro" name="SOUP_TYPE_AUTH_NTLM" link="SoupAuth.html#SOUP-TYPE-AUTH-NTLM:CAPS" since="2.34"/>
-    <keyword type="macro" name="SOUP_TYPE_AUTH_NEGOTIATE" link="SoupAuth.html#SOUP-TYPE-AUTH-NEGOTIATE:CAPS" since="2.54"/>
     <keyword type="function" name="soup_auth_negotiate_supported ()" link="SoupAuth.html#soup-auth-negotiate-supported" since="2.54"/>
     <keyword type="function" name="soup_auth_is_for_proxy ()" link="SoupAuth.html#soup-auth-is-for-proxy"/>
     <keyword type="function" name="soup_auth_get_scheme_name ()" link="SoupAuth.html#soup-auth-get-scheme-name"/>
@@ -80,6 +76,10 @@
     <keyword type="function" name="soup_auth_get_protection_space ()" link="SoupAuth.html#soup-auth-get-protection-space"/>
     <keyword type="function" name="soup_auth_free_protection_space ()" link="SoupAuth.html#soup-auth-free-protection-space"/>
     <keyword type="struct" name="SoupAuth" link="SoupAuth.html#SoupAuth-struct"/>
+    <keyword type="macro" name="SOUP_TYPE_AUTH_BASIC" link="SoupAuth.html#SOUP-TYPE-AUTH-BASIC:CAPS" since="2.34"/>
+    <keyword type="macro" name="SOUP_TYPE_AUTH_DIGEST" link="SoupAuth.html#SOUP-TYPE-AUTH-DIGEST:CAPS" since="2.34"/>
+    <keyword type="macro" name="SOUP_TYPE_AUTH_NTLM" link="SoupAuth.html#SOUP-TYPE-AUTH-NTLM:CAPS" since="2.34"/>
+    <keyword type="macro" name="SOUP_TYPE_AUTH_NEGOTIATE" link="SoupAuth.html#SOUP-TYPE-AUTH-NEGOTIATE:CAPS" since="2.54"/>
     <keyword type="macro" name="SOUP_AUTH_SCHEME_NAME" link="SoupAuth.html#SOUP-AUTH-SCHEME-NAME:CAPS"/>
     <keyword type="macro" name="SOUP_AUTH_REALM" link="SoupAuth.html#SOUP-AUTH-REALM:CAPS"/>
     <keyword type="macro" name="SOUP_AUTH_HOST" link="SoupAuth.html#SOUP-AUTH-HOST:CAPS"/>
@@ -159,10 +159,6 @@
     <keyword type="function" name="soup_cookie_set_path ()" link="SoupCookie.html#soup-cookie-set-path" since="2.24"/>
     <keyword type="function" name="soup_cookie_get_path ()" link="SoupCookie.html#soup-cookie-get-path" since="2.32"/>
     <keyword type="function" name="soup_cookie_set_max_age ()" link="SoupCookie.html#soup-cookie-set-max-age" since="2.24"/>
-    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_HOUR" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-HOUR:CAPS" since="2.24"/>
-    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_DAY" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-DAY:CAPS" since="2.24"/>
-    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_WEEK" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-WEEK:CAPS" since="2.24"/>
-    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_YEAR" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-YEAR:CAPS" since="2.24"/>
     <keyword type="function" name="soup_cookie_set_expires ()" link="SoupCookie.html#soup-cookie-set-expires" since="2.24"/>
     <keyword type="function" name="soup_cookie_get_expires ()" link="SoupCookie.html#soup-cookie-get-expires" since="2.32"/>
     <keyword type="function" name="soup_cookie_set_secure ()" link="SoupCookie.html#soup-cookie-set-secure" since="2.24"/>
@@ -180,6 +176,10 @@
     <keyword type="function" name="soup_cookies_to_cookie_header ()" link="SoupCookie.html#soup-cookies-to-cookie-header" since="2.24"/>
     <keyword type="function" name="soup_cookies_free ()" link="SoupCookie.html#soup-cookies-free" since="2.24"/>
     <keyword type="struct" name="SoupCookie" link="SoupCookie.html#SoupCookie-struct"/>
+    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_HOUR" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-HOUR:CAPS" since="2.24"/>
+    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_DAY" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-DAY:CAPS" since="2.24"/>
+    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_WEEK" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-WEEK:CAPS" since="2.24"/>
+    <keyword type="macro" name="SOUP_COOKIE_MAX_AGE_ONE_YEAR" link="SoupCookie.html#SOUP-COOKIE-MAX-AGE-ONE-YEAR:CAPS" since="2.24"/>
     <keyword type="function" name="soup_message_new ()" link="SoupMessage.html#soup-message-new"/>
     <keyword type="function" name="soup_message_new_from_uri ()" link="SoupMessage.html#soup-message-new-from-uri"/>
     <keyword type="function" name="soup_message_set_request ()" link="SoupMessage.html#soup-message-set-request"/>
@@ -503,6 +503,9 @@
     <keyword type="function" name="soup_session_get_feature_for_message ()" link="SoupSession.html#soup-session-get-feature-for-message" since="2.28"/>
     <keyword type="function" name="soup_session_has_feature ()" link="SoupSession.html#soup-session-has-feature" since="2.42"/>
     <keyword type="function" name="soup_session_steal_connection ()" link="SoupSession.html#soup-session-steal-connection" since="2.50"/>
+    <keyword type="function" name="SoupSessionConnectProgressCallback ()" link="SoupSession.html#SoupSessionConnectProgressCallback" since="2.62"/>
+    <keyword type="function" name="soup_session_connect_async ()" link="SoupSession.html#soup-session-connect-async" since="2.62"/>
+    <keyword type="function" name="soup_session_connect_finish ()" link="SoupSession.html#soup-session-connect-finish" since="2.62"/>
     <keyword type="struct" name="SoupSession" link="SoupSession.html#SoupSession-struct"/>
     <keyword type="enum" name="enum SoupRequestError" link="SoupSession.html#SoupRequestError" since="2.42"/>
     <keyword type="macro" name="SOUP_REQUEST_ERROR" link="SoupSession.html#SOUP-REQUEST-ERROR:CAPS" since="2.42"/>
@@ -619,10 +622,10 @@
     <keyword type="function" name="soup_get_minor_version ()" link="libsoup-2.4-Version-Information.html#soup-get-minor-version" since="2.42"/>
     <keyword type="function" name="soup_get_micro_version ()" link="libsoup-2.4-Version-Information.html#soup-get-micro-version" since="2.42"/>
     <keyword type="function" name="soup_check_version ()" link="libsoup-2.4-Version-Information.html#soup-check-version" since="2.42"/>
+    <keyword type="macro" name="SOUP_CHECK_VERSION()" link="libsoup-2.4-Version-Information.html#SOUP-CHECK-VERSION:CAPS" since="2.42"/>
     <keyword type="macro" name="SOUP_MAJOR_VERSION" link="libsoup-2.4-Version-Information.html#SOUP-MAJOR-VERSION:CAPS" since="2.42"/>
     <keyword type="macro" name="SOUP_MINOR_VERSION" link="libsoup-2.4-Version-Information.html#SOUP-MINOR-VERSION:CAPS" since="2.42"/>
     <keyword type="macro" name="SOUP_MICRO_VERSION" link="libsoup-2.4-Version-Information.html#SOUP-MICRO-VERSION:CAPS" since="2.42"/>
-    <keyword type="macro" name="SOUP_CHECK_VERSION()" link="libsoup-2.4-Version-Information.html#SOUP-CHECK-VERSION:CAPS" since="2.42"/>
     <keyword type="macro" name="SOUP_VERSION_MIN_REQUIRED" link="libsoup-2.4-Version-Information.html#SOUP-VERSION-MIN-REQUIRED:CAPS" since="2.42"/>
     <keyword type="macro" name="SOUP_VERSION_MAX_ALLOWED" link="libsoup-2.4-Version-Information.html#SOUP-VERSION-MAX-ALLOWED:CAPS" since="2.42"/>
     <keyword type="macro" name="SOUP_VERSION_2_24" link="libsoup-2.4-Version-Information.html#SOUP-VERSION-2-24:CAPS" since="2.42"/>
@@ -642,9 +645,10 @@
     <keyword type="macro" name="SOUP_VERSION_2_52" link="libsoup-2.4-Version-Information.html#SOUP-VERSION-2-52:CAPS" since="2.52"/>
     <keyword type="struct" name="SoupSessionFeature" link="SoupSessionFeature.html#SoupSessionFeature-struct"/>
     <keyword type="struct" name="SoupSessionFeatureInterface" link="SoupSessionFeature.html#SoupSessionFeatureInterface" since="2.24"/>
-    <keyword type="macro" name="SOUP_TYPE_AUTH_MANAGER" link="SoupAuthManager.html#SOUP-TYPE-AUTH-MANAGER:CAPS" since="2.42"/>
     <keyword type="function" name="soup_auth_manager_use_auth ()" link="SoupAuthManager.html#soup-auth-manager-use-auth" since="2.42"/>
+    <keyword type="function" name="soup_auth_manager_clear_cached_credentials ()" link="SoupAuthManager.html#soup-auth-manager-clear-cached-credentials" since="2.58"/>
     <keyword type="struct" name="SoupAuthManager" link="SoupAuthManager.html#SoupAuthManager-struct"/>
+    <keyword type="macro" name="SOUP_TYPE_AUTH_MANAGER" link="SoupAuthManager.html#SOUP-TYPE-AUTH-MANAGER:CAPS" since="2.42"/>
     <keyword type="signal" name="The “authenticate” signal" link="SoupAuthManager.html#SoupAuthManager-authenticate"/>
     <keyword type="struct" name="SoupContentDecoder" link="SoupContentDecoder.html#SoupContentDecoder-struct"/>
     <keyword type="function" name="soup_content_sniffer_new ()" link="SoupContentSniffer.html#soup-content-sniffer-new" since="2.28"/>
@@ -735,15 +739,16 @@
     <keyword type="function" name="soup_websocket_connection_close ()" link="libsoup-2.4-WebSockets.html#soup-websocket-connection-close" since="2.50"/>
     <keyword type="function" name="soup_websocket_connection_get_close_code ()" link="libsoup-2.4-WebSockets.html#soup-websocket-connection-get-close-code" since="2.50"/>
     <keyword type="function" name="soup_websocket_connection_get_close_data ()" link="libsoup-2.4-WebSockets.html#soup-websocket-connection-get-close-data" since="2.50"/>
-    <keyword type="macro" name="SOUP_WEBSOCKET_ERROR" link="libsoup-2.4-WebSockets.html#SOUP-WEBSOCKET-ERROR:CAPS" since="2.50"/>
     <keyword type="struct" name="SoupWebsocketConnection" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection-struct"/>
     <keyword type="enum" name="enum SoupWebsocketConnectionType" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnectionType" since="2.50"/>
     <keyword type="enum" name="enum SoupWebsocketState" link="libsoup-2.4-WebSockets.html#SoupWebsocketState" since="2.50"/>
     <keyword type="enum" name="enum SoupWebsocketDataType" link="libsoup-2.4-WebSockets.html#SoupWebsocketDataType" since="2.50"/>
     <keyword type="enum" name="enum SoupWebsocketCloseCode" link="libsoup-2.4-WebSockets.html#SoupWebsocketCloseCode" since="2.50"/>
     <keyword type="enum" name="enum SoupWebsocketError" link="libsoup-2.4-WebSockets.html#SoupWebsocketError" since="2.50"/>
+    <keyword type="macro" name="SOUP_WEBSOCKET_ERROR" link="libsoup-2.4-WebSockets.html#SOUP-WEBSOCKET-ERROR:CAPS" since="2.50"/>
     <keyword type="property" name="The “connection-type” property" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection--connection-type"/>
     <keyword type="property" name="The “io-stream” property" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection--io-stream"/>
+    <keyword type="property" name="The “keepalive-interval” property" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection--keepalive-interval"/>
     <keyword type="property" name="The “max-incoming-payload-size” property" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection--max-incoming-payload-size"/>
     <keyword type="property" name="The “origin” property" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection--origin"/>
     <keyword type="property" name="The “protocol” property" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection--protocol"/>
@@ -753,6 +758,7 @@
     <keyword type="signal" name="The “closing” signal" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection-closing"/>
     <keyword type="signal" name="The “error” signal" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection-error"/>
     <keyword type="signal" name="The “message” signal" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection-message"/>
+    <keyword type="signal" name="The “pong” signal" link="libsoup-2.4-WebSockets.html#SoupWebsocketConnection-pong"/>
     <keyword type="function" name="soup_address_new ()" link="SoupAddress.html#soup-address-new"/>
     <keyword type="function" name="soup_address_new_from_sockaddr ()" link="SoupAddress.html#soup-address-new-from-sockaddr"/>
     <keyword type="function" name="soup_address_new_any ()" link="SoupAddress.html#soup-address-new-any"/>
@@ -850,6 +856,7 @@
     <keyword type="constant" name="SOUP_MESSAGE_NEW_CONNECTION" link="SoupMessage.html#SOUP-MESSAGE-NEW-CONNECTION:CAPS"/>
     <keyword type="constant" name="SOUP_MESSAGE_IDEMPOTENT" link="SoupMessage.html#SOUP-MESSAGE-IDEMPOTENT:CAPS"/>
     <keyword type="constant" name="SOUP_MESSAGE_IGNORE_CONNECTION_LIMITS" link="SoupMessage.html#SOUP-MESSAGE-IGNORE-CONNECTION-LIMITS:CAPS"/>
+    <keyword type="constant" name="SOUP_MESSAGE_DO_NOT_USE_AUTH_CACHE" link="SoupMessage.html#SOUP-MESSAGE-DO-NOT-USE-AUTH-CACHE:CAPS"/>
     <keyword type="constant" name="SOUP_MESSAGE_PRIORITY_VERY_LOW" link="SoupMessage.html#SOUP-MESSAGE-PRIORITY-VERY-LOW:CAPS"/>
     <keyword type="constant" name="SOUP_MESSAGE_PRIORITY_LOW" link="SoupMessage.html#SOUP-MESSAGE-PRIORITY-LOW:CAPS"/>
     <keyword type="constant" name="SOUP_MESSAGE_PRIORITY_NORMAL" link="SoupMessage.html#SOUP-MESSAGE-PRIORITY-NORMAL:CAPS"/>
@@ -1001,5 +1008,50 @@
     <keyword type="constant" name="SOUP_SOCKET_WOULD_BLOCK" link="SoupSocket.html#SOUP-SOCKET-WOULD-BLOCK:CAPS"/>
     <keyword type="constant" name="SOUP_SOCKET_EOF" link="SoupSocket.html#SOUP-SOCKET-EOF:CAPS"/>
     <keyword type="constant" name="SOUP_SOCKET_ERROR" link="SoupSocket.html#SOUP-SOCKET-ERROR:CAPS"/>
+    <keyword type="member" name="SoupCookie-struct.name" link="SoupCookie.html#SoupCookie-struct.name"/>
+    <keyword type="member" name="SoupCookie-struct.value" link="SoupCookie.html#SoupCookie-struct.value"/>
+    <keyword type="member" name="SoupCookie-struct.domain" link="SoupCookie.html#SoupCookie-struct.domain"/>
+    <keyword type="member" name="SoupCookie-struct.path" link="SoupCookie.html#SoupCookie-struct.path"/>
+    <keyword type="member" name="SoupCookie-struct.expires" link="SoupCookie.html#SoupCookie-struct.expires"/>
+    <keyword type="member" name="SoupCookie-struct.secure" link="SoupCookie.html#SoupCookie-struct.secure"/>
+    <keyword type="member" name="SoupCookie-struct.http-only" link="SoupCookie.html#SoupCookie-struct.http-only"/>
+    <keyword type="member" name="SoupMessage-struct.method" link="SoupMessage.html#SoupMessage-struct.method"/>
+    <keyword type="member" name="SoupMessage-struct.status-code" link="SoupMessage.html#SoupMessage-struct.status-code"/>
+    <keyword type="member" name="SoupMessage-struct.reason-phrase" link="SoupMessage.html#SoupMessage-struct.reason-phrase"/>
+    <keyword type="member" name="SoupMessage-struct.request-body" link="SoupMessage.html#SoupMessage-struct.request-body"/>
+    <keyword type="member" name="SoupMessage-struct.request-headers" link="SoupMessage.html#SoupMessage-struct.request-headers"/>
+    <keyword type="member" name="SoupMessage-struct.response-body" link="SoupMessage.html#SoupMessage-struct.response-body"/>
+    <keyword type="member" name="SoupMessage-struct.response-headers" link="SoupMessage.html#SoupMessage-struct.response-headers"/>
+    <keyword type="member" name="SoupRange.start" link="SoupMessageHeaders.html#SoupRange.start"/>
+    <keyword type="member" name="SoupRange.end" link="SoupMessageHeaders.html#SoupRange.end"/>
+    <keyword type="member" name="SoupBuffer-struct.data" link="SoupMessageBody.html#SoupBuffer-struct.data"/>
+    <keyword type="member" name="SoupBuffer-struct.length" link="SoupMessageBody.html#SoupBuffer-struct.length"/>
+    <keyword type="member" name="SoupMessageBody-struct.data" link="SoupMessageBody.html#SoupMessageBody-struct.data"/>
+    <keyword type="member" name="SoupMessageBody-struct.length" link="SoupMessageBody.html#SoupMessageBody-struct.length"/>
+    <keyword type="member" name="SoupDate-struct.year" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.year"/>
+    <keyword type="member" name="SoupDate-struct.month" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.month"/>
+    <keyword type="member" name="SoupDate-struct.day" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.day"/>
+    <keyword type="member" name="SoupDate-struct.hour" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.hour"/>
+    <keyword type="member" name="SoupDate-struct.minute" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.minute"/>
+    <keyword type="member" name="SoupDate-struct.second" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.second"/>
+    <keyword type="member" name="SoupDate-struct.utc" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.utc"/>
+    <keyword type="member" name="SoupDate-struct.offset" link="libsoup-2.4-Soup-Miscellaneous-Utilities.html#SoupDate-struct.offset"/>
+    <keyword type="member" name="SoupURI-struct.scheme" link="SoupURI.html#SoupURI-struct.scheme"/>
+    <keyword type="member" name="SoupURI-struct.user" link="SoupURI.html#SoupURI-struct.user"/>
+    <keyword type="member" name="SoupURI-struct.password" link="SoupURI.html#SoupURI-struct.password"/>
+    <keyword type="member" name="SoupURI-struct.host" link="SoupURI.html#SoupURI-struct.host"/>
+    <keyword type="member" name="SoupURI-struct.port" link="SoupURI.html#SoupURI-struct.port"/>
+    <keyword type="member" name="SoupURI-struct.path" link="SoupURI.html#SoupURI-struct.path"/>
+    <keyword type="member" name="SoupURI-struct.query" link="SoupURI.html#SoupURI-struct.query"/>
+    <keyword type="member" name="SoupURI-struct.fragment" link="SoupURI.html#SoupURI-struct.fragment"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.parent" link="SoupSessionFeature.html#SoupSessionFeatureInterface.parent"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.attach" link="SoupSessionFeature.html#SoupSessionFeatureInterface.attach"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.detach" link="SoupSessionFeature.html#SoupSessionFeatureInterface.detach"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.request-queued" link="SoupSessionFeature.html#SoupSessionFeatureInterface.request-queued"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.request-started" link="SoupSessionFeature.html#SoupSessionFeatureInterface.request-started"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.request-unqueued" link="SoupSessionFeature.html#SoupSessionFeatureInterface.request-unqueued"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.add-feature" link="SoupSessionFeature.html#SoupSessionFeatureInterface.add-feature"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.remove-feature" link="SoupSessionFeature.html#SoupSessionFeatureInterface.remove-feature"/>
+    <keyword type="member" name="SoupSessionFeatureInterface.has-feature" link="SoupSessionFeature.html#SoupSessionFeatureInterface.has-feature"/>
   </functions>
 </book>
