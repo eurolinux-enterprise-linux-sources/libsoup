@@ -2,7 +2,7 @@
 
 Name: libsoup
 Version: 2.56.0
-Release: 4%{?dist}
+Release: 6%{?dist}
 Summary: Soup, an HTTP library implementation
 
 License: LGPLv2
@@ -22,6 +22,11 @@ Patch05: tcms-site-warning.patch
 # https://bugzilla.gnome.org/show_bug.cgi?id=785774
 # https://bugzilla.redhat.com/show_bug.cgi?id=1479281
 Patch06: chunked-decoding-buffer-overrun-CVE-2017-2885.patch
+# http://bugzilla.gnome.org/show_bug.cgi?id=788238
+# https://bugzilla.redhat.com/show_bug.cgi?id=1495552
+Patch07: auth-try-all-available.patch
+# https://bugzilla.redhat.com/show_bug.cgi?id=1513355
+Patch08: crash-under-soup_socket_new.patch
 
 BuildRequires: glib2-devel >= %{glib2_version}
 BuildRequires: glib-networking
@@ -62,6 +67,8 @@ you to develop applications that use the libsoup library.
 %patch04 -p1 -b .negotiate-connection-close
 %patch05 -p1 -b .tcms-site-warning
 %patch06 -p1 -b .cve-2017-2885
+%patch07 -p1 -b .auth-try-all
+%patch08 -p1 -b .crash-under-soup_socket_new
 
 %build
 %configure --disable-static
@@ -101,8 +108,14 @@ rm -f $RPM_BUILD_ROOT/%{_libdir}/*.la
 %{_datadir}/vala/vapi/libsoup-2.4.vapi
 
 %changelog
+* Wed Nov 15 2017 Milan Crha <mcrha@redhat.com> - 2.56.0-6
+- Fix for crash under soup_socket_new() (rh #1513355)
+
+* Fri Sep 29 2017 Tomas Popela <tpopela@redhat.com> - 2.56.0-5
+- libsoup should fallback to another authentication type if the current failed (rh #1495552)
+
 * Wed Aug 09 2017 Tomas Popela <tpopela@redhat.com> - 2.56.0-4
-- Fix chunked decoding buffer overrun (CVE-2017-2885) (rh #1479322)
+- Fix chunked decoding buffer overrun (CVE-2017-2885) (rh #1479321)
 
 * Thu Jun 22 2017 Tomas Popela <tpopela@redhat.com> - 2.56.0-3
 - libsoup stuck on infinite loop for kerberized pages (rh #1439798)
