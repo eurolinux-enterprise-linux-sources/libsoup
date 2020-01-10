@@ -2,7 +2,7 @@
 
 Name: libsoup
 Version: 2.56.0
-Release: 3%{?dist}
+Release: 4%{?dist}
 Summary: Soup, an HTTP library implementation
 
 License: LGPLv2
@@ -19,6 +19,9 @@ Patch03: negotiate-internals.patch
 Patch04: negotiate-connection-close.patch
 # https://bugzilla.gnome.org/show_bug.cgi?id=783781
 Patch05: tcms-site-warning.patch
+# https://bugzilla.gnome.org/show_bug.cgi?id=785774
+# https://bugzilla.redhat.com/show_bug.cgi?id=1479281
+Patch06: chunked-decoding-buffer-overrun-CVE-2017-2885.patch
 
 BuildRequires: glib2-devel >= %{glib2_version}
 BuildRequires: glib-networking
@@ -58,6 +61,7 @@ you to develop applications that use the libsoup library.
 %patch03 -p1 -b .negotiate-internals
 %patch04 -p1 -b .negotiate-connection-close
 %patch05 -p1 -b .tcms-site-warning
+%patch06 -p1 -b .cve-2017-2885
 
 %build
 %configure --disable-static
@@ -97,6 +101,9 @@ rm -f $RPM_BUILD_ROOT/%{_libdir}/*.la
 %{_datadir}/vala/vapi/libsoup-2.4.vapi
 
 %changelog
+* Wed Aug 09 2017 Tomas Popela <tpopela@redhat.com> - 2.56.0-4
+- Fix chunked decoding buffer overrun (CVE-2017-2885) (rh #1479322)
+
 * Thu Jun 22 2017 Tomas Popela <tpopela@redhat.com> - 2.56.0-3
 - libsoup stuck on infinite loop for kerberized pages (rh #1439798)
 
