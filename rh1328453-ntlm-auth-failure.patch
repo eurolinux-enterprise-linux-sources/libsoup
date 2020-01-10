@@ -1,0 +1,29 @@
+diff -up libsoup-2.48.1/libsoup/soup-auth-ntlm.c.ntlm-auth-failure libsoup-2.48.1/libsoup/soup-auth-ntlm.c
+--- libsoup-2.48.1/libsoup/soup-auth-ntlm.c.ntlm-auth-failure	2016-04-19 17:53:34.747283256 +0200
++++ libsoup-2.48.1/libsoup/soup-auth-ntlm.c	2016-04-19 17:53:34.753283256 +0200
+@@ -354,6 +354,7 @@ soup_auth_ntlm_update_connection (SoupCo
+ 			conn->state = SOUP_NTLM_SSO_FAILED;
+ 			success = FALSE;
+ 		} else if (!g_ascii_strcasecmp (response, "PW")) {
++			conn->state = SOUP_NTLM_SSO_FAILED;
+ 			priv->sso_available = FALSE;
+ 			g_free (response);
+ 		} else {
+@@ -484,7 +485,7 @@ soup_auth_ntlm_get_connection_authorizat
+ 					priv->sso_available = FALSE;
+ 				}
+ 			} else {
+-				g_warning ("NTLM single-sign-on using %s failed", NTLM_AUTH);
++				g_debug ("NTLM single-sign-on using %s failed", NTLM_AUTH);
+ 			}
+ 		}
+ 		/* If NTLM single-sign-on fails, go back to original
+@@ -519,7 +520,7 @@ soup_auth_ntlm_get_connection_authorizat
+ #ifdef USE_NTLM_AUTH
+ 	case SOUP_NTLM_SSO_FAILED:
+ 		/* Restart request without SSO */
+-		g_warning ("NTLM single-sign-on by using %s failed", NTLM_AUTH);
++		g_debug ("NTLM single-sign-on by using %s failed", NTLM_AUTH);
+ 		priv->sso_available = FALSE;
+ 		header = soup_ntlm_request ();
+ 		conn->state = SOUP_NTLM_SENT_REQUEST;

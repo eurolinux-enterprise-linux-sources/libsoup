@@ -1,0 +1,23 @@
+diff -up libsoup-2.44.2/libsoup/soup-auth-ntlm.c.ntlm-fix libsoup-2.44.2/libsoup/soup-auth-ntlm.c
+--- libsoup-2.44.2/libsoup/soup-auth-ntlm.c.ntlm-fix	2013-11-11 11:02:00.000000000 -0400
++++ libsoup-2.44.2/libsoup/soup-auth-ntlm.c	2014-04-29 11:52:15.974627250 -0400
+@@ -300,12 +300,14 @@ soup_auth_ntlm_update_connection (SoupCo
+ 	if (conn->state > SOUP_NTLM_SENT_REQUEST) {
+ 		if (priv->password_state == SOUP_NTLM_PASSWORD_ACCEPTED) {
+ 			/* We know our password is correct, so a 401
+-			 * means "permission denied". Since the conn
+-			 * state is now FAILED, the auth is no longer
+-			 * is_ready() for this message, so this will
+-			 * cause a "retrying" authenticate signal.
++			 * means "permission denied". The code can't deal
++			 * with re-authenticating correctly, so make sure
++			 * we don't try.
+ 			 */
+-			conn->state = SOUP_NTLM_FAILED;
++			if (soup_message_is_keepalive (msg)) {
++				soup_message_headers_append (msg->response_headers,
++							     "Connection", "close");
++			}
+ 			return TRUE;
+ 		}
+ 

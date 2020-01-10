@@ -1,0 +1,23 @@
+diff -up libsoup-2.48.1/libsoup/Makefile.am.check libsoup-2.48.1/libsoup/Makefile.am
+--- libsoup-2.48.1/libsoup/Makefile.am.check	2015-05-26 08:43:08.168859956 -0400
++++ libsoup-2.48.1/libsoup/Makefile.am	2015-05-26 08:43:35.820163943 -0400
+@@ -304,6 +304,6 @@ check-local:
+ 	@nm $(builddir)/.libs/libsoup-2.4.so | \
+ 		grep "^[[:xdigit:]]\+ [BTR] " | \
+ 		sed "s/^[[:xdigit:]]\+ [BTR] //" | \
+-		env LANG=C sort -u | \
++		env LC_ALL=C sort -u | \
+ 		diff -U0 $(srcdir)/libsoup-2.4.sym - >&2
+ endif
+diff -up libsoup-2.48.1/libsoup/Makefile.in.check libsoup-2.48.1/libsoup/Makefile.in
+--- libsoup-2.48.1/libsoup/Makefile.in.check	2015-05-26 08:43:03.639973945 -0400
++++ libsoup-2.48.1/libsoup/Makefile.in	2015-05-26 08:43:29.239329595 -0400
+@@ -1230,7 +1230,7 @@ include $(INTROSPECTION_MAKEFILE)
+ @OS_LINUX_TRUE@	@nm $(builddir)/.libs/libsoup-2.4.so | \
+ @OS_LINUX_TRUE@		grep "^[[:xdigit:]]\+ [BTR] " | \
+ @OS_LINUX_TRUE@		sed "s/^[[:xdigit:]]\+ [BTR] //" | \
+-@OS_LINUX_TRUE@		env LANG=C sort -u | \
++@OS_LINUX_TRUE@		env LC_ALL=C sort -u | \
+ @OS_LINUX_TRUE@		diff -U0 $(srcdir)/libsoup-2.4.sym - >&2
+ 
+ # Tell versions [3.59,3.63) of GNU make to not export all variables.
